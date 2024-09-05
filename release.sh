@@ -47,7 +47,7 @@ cd ..
 
 
 # Push tag to remote repository
-echo "[i] Push the tag v$version to remote repository..."
+echo "[i] Pushing the tag v$version to remote repository..."
 git add . && git commit -m "v$version" && git push origin tag $version
 if [ $? -ne 0 ]; then
     echo "[x] Failed to push tag v$version to remote repository."
