@@ -66,4 +66,4 @@ echo "[+] OK"
 
 echo ""
 echo "[i] Done"
-echo "[i] Don't forget upload the release builds (\"./$dist_dir/*.zip\") to the GitHub release page."
+echo "[i] Don't forget upload the release builds (\"./$dist_dir/*.tar.xz\") to the GitHub releases page."

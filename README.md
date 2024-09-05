@@ -17,13 +17,13 @@ x86, x86_64
 
 # Install
 
-We can install xex from [release](https://github.com/hideckies/xex/releases) page.
+We can install xex from [releases](https://github.com/hideckies/xex/releases).
 
 <br />
 
 # Build
 
-To build the project from the repository, clone and build it with `zig`:
+To build the project, clone and build it with `zig`:
 
 ```sh
 git clone https://github.com/hideckies/xex
