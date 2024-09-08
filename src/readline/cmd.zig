@@ -24,7 +24,6 @@ pub const CommandType = enum {
     functions,
     disassemble,
     // decompile,
-    // hexdump,
 
     // BREAKPOINTS
     breakpoint,
@@ -33,11 +32,9 @@ pub const CommandType = enum {
     breakpoints,
 
     // RUNNING
-    conti, // the word 'continue' is reserved.
+    conti, // *the word 'continue' is reserved.
     step,
-    // step_count,
-    // next,
-    // next_count,
+    stepi,
     restart,
 
     // VALUES
@@ -85,8 +82,6 @@ pub const CommandType = enum {
             return CommandType.disassemble;
             // } else if (std.mem.eql(u8, command, "decompile")) {
             //     return CommandType.decompile;
-            // } else if (std.mem.eql(u8, command, "hexdump")) {
-            //     return CommandType.hexdump;
         } else if (std.mem.eql(u8, command, "breakpoint") or std.mem.eql(u8, command, "bp")) {
             return CommandType.breakpoint;
         } else if (std.mem.eql(u8, command, "breakpoint+") or std.mem.eql(u8, command, "bp+")) {
@@ -99,6 +94,8 @@ pub const CommandType = enum {
             return CommandType.conti;
         } else if (std.mem.eql(u8, command, "step")) {
             return CommandType.step;
+        } else if (std.mem.eql(u8, command, "stepi")) {
+            return CommandType.stepi;
         } else if (std.mem.eql(u8, command, "restart")) {
             return CommandType.restart;
         } else if (std.mem.eql(u8, command, "registers") or std.mem.eql(u8, command, "regs")) {
@@ -184,8 +181,6 @@ pub const Command = struct {
             try stdout.print("{s}\n", .{constant.HELP_DISASSEMBLE});
             // } else if (std.mem.eql(u8, command_name, "decompile")) {
             //     try stdout.print("{s}\n", .{constant.HELP_DECOMPILE});
-            // } else if (std.mem.eql(u8, command_name, "hexdump")) {
-            //     try stdout.print("{s}\n", .{constant.HELP_HEXDUMP});
         } else if (std.mem.eql(u8, command_name, "breakpoint") or std.mem.eql(u8, command_name, "bp")) {
             try stdout.print("{s}\n", .{constant.HELP_BREAKPOINT});
         } else if (std.mem.eql(u8, command_name, "breakpoint+") or std.mem.eql(u8, command_name, "bp+")) {
@@ -198,6 +193,8 @@ pub const Command = struct {
             try stdout.print("{s}\n", .{constant.HELP_CONTINUE});
         } else if (std.mem.eql(u8, command_name, "step")) {
             try stdout.print("{s}\n", .{constant.HELP_STEP});
+        } else if (std.mem.eql(u8, command_name, "stepi")) {
+            try stdout.print("{s}\n", .{constant.HELP_STEPI});
         } else if (std.mem.eql(u8, command_name, "restart")) {
             try stdout.print("{s}\n", .{constant.HELP_RESTART});
         } else if (std.mem.eql(u8, command_name, "registers") or std.mem.eql(u8, command_name, "regs")) {

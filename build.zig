@@ -68,6 +68,8 @@ const BuildOptions = struct {
         // const optimize = b.standardOptimizeOption(.{});
         const optimize = .ReleaseSafe;
 
+        b.enable_wine = true;
+
         const version = b.option(
             []const u8,
             "version",

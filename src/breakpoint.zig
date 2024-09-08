@@ -57,7 +57,19 @@ pub const Breakpoint = struct {
         const restored_inst = (inst & TRAP_INST_MASK) | self.orig_inst;
         try ptrace.writeText(self.pid, self.addr, restored_inst);
         self.orig_inst = restored_inst;
-        self.is_set = true;
+        self.is_set = false;
+    }
+
+    // If the process exited, return true.
+    pub fn reset(self: *Self) !bool {
+        try self.unset();
+        const status = try ptrace.singleStep(self.pid);
+        switch (status) {
+            .SignalTrap => return false,
+            .ProcessExited => return true,
+            else => return error.WaitError,
+        }
+        try self.set();
     }
 };
 

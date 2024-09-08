@@ -44,6 +44,18 @@ pub fn restart(dbg: *Debugger, cmd: *Command) !void {
 }
 
 pub fn conti(dbg: *Debugger, cmd: *Command) !void {
+    const pc = try ptrace.readRegister(dbg.process.pid, "pc");
+    for (dbg.breakpoints.items) |*bp| {
+        if (bp.addr == pc) {
+            if (bp.is_set) {
+                if (try bp.reset()) {
+                    try restart(dbg, cmd);
+                }
+            }
+            break;
+        }
+    }
+
     const status = try ptrace.continueExec(dbg.process.pid);
     switch (status) {
         .SignalTrap => return,
@@ -53,10 +65,45 @@ pub fn conti(dbg: *Debugger, cmd: *Command) !void {
 }
 
 pub fn step(dbg: *Debugger, cmd: *Command) !void {
-    const status = try ptrace.singleStep(dbg.process.pid);
-    switch (status) {
-        .SignalTrap => return,
-        .ProcessExited => try restart(dbg, cmd),
-        else => return error.WaitError,
+    const allocator = std.heap.page_allocator;
+
+    var pc = try ptrace.readRegister(dbg.process.pid, "pc");
+    var dwarf = dbg.debug_info.elf.?.dwarf;
+    const compile_unit = try dwarf.findCompileUnit(pc);
+    try stdout.print("compile_unit: {}\n", .{compile_unit});
+    const line_info = try dwarf.getLineNumberInfo(allocator, compile_unit, pc);
+
+    while (true) {
+        try stepi(dbg, cmd);
+
+        pc = try ptrace.readRegister(dbg.process.pid, "pc");
+        const new_line_info = try dwarf.getLineNumberInfo(allocator, compile_unit, pc);
+        if (std.meta.eql(new_line_info, line_info)) {
+            break;
+        }
+    }
+}
+
+pub fn stepi(dbg: *Debugger, cmd: *Command) !void {
+    const pc = try ptrace.readRegister(dbg.process.pid, "pc");
+
+    var bp_reached: bool = false;
+    for (dbg.breakpoints.items) |*bp| {
+        if (bp.addr == pc) {
+            bp_reached = true;
+            if (try bp.reset()) {
+                try restart(dbg, cmd);
+            }
+            break;
+        }
+    }
+
+    if (!bp_reached) {
+        const status = try ptrace.singleStep(dbg.process.pid);
+        switch (status) {
+            .SignalTrap => return,
+            .ProcessExited => try restart(dbg, cmd),
+            else => return error.WaitError,
+        }
     }
 }

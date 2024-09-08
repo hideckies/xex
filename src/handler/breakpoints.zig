@@ -25,7 +25,7 @@ pub fn breakpoint(dbg: *Debugger, cmd: Command) !void {
 
     // Find the target breakpoint by index.
     for (dbg.breakpoints.items, 0..) |bp, i| {
-        if (i == target_idx) {
+        if (i + 1 == target_idx) {
             // Display the information.
             return stdout.print("{s}\n", .{bp});
         }
@@ -92,7 +92,7 @@ pub fn breakpointDelete(dbg: *Debugger, cmd: Command) !void {
     // Find the target breakpoint by index.
     for (dbg.breakpoints.items, 0..) |*item, i| {
         var bp = item.*;
-        if (i == target_idx) {
+        if (i + 1 == target_idx) {
             // Unset & delete this breakpoint.
             try bp.unset();
             _ = dbg.breakpoints.orderedRemove(i);
@@ -122,7 +122,7 @@ pub fn breakpoints(dbg: *Debugger) !void {
     // var str_bps = std.ArrayList([]const u8).init(dbg.allocator);
     for (dbg.breakpoints.items, 0..) |bp, i| {
         const str_bp = try std.fmt.allocPrint(dbg.allocator, "{s}\t{s}", .{
-            try cham.greenBright().fmt("{d}", .{i}),
+            try cham.greenBright().fmt("{d}", .{i + 1}),
             try cham.yellow().fmt("0x{x}", .{bp.addr}),
         });
         // try str_bps.append(str_bp);

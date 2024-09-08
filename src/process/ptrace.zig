@@ -117,9 +117,9 @@ pub fn writeRegister(pid: posix.pid_t, reg_name: []const u8, value: usize) !void
 
 // Step back (PC - 1).
 pub fn resetPC(pid: posix.pid_t) !usize {
-    const value = try readRegister(pid, "pc") - 1;
-    try writeRegister(pid, "pc", value);
-    return value;
+    const pc = try readRegister(pid, "pc") - 1;
+    try writeRegister(pid, "pc", pc);
+    return pc;
 }
 
 pub fn continueExec(pid: posix.pid_t) !WaitStatus {

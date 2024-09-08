@@ -2,28 +2,28 @@
 
 Reverse engineering tool for ELF and PE. I'm developing this to enhance my reverse engineering and binary exploitation skills.
 
-### Features
+## Features
 
 - Dump file information (headers, hashes, and more)
 - Debugger.
 
 *xex currently only has basic functionality.
 
-### Supported Architecutures
+## Supported Architecutures
 
 x86, x86_64
 
 <br />
 
-# Install
+## Install
 
-We can install xex from [releases](https://github.com/hideckies/xex/releases).
+We can install **xex** from [releases](https://github.com/hideckies/xex/releases).
 
 <br />
 
-# Build
+## Build
 
-To build the project, clone and build it with `zig`:
+To build the project, clone and build it with `zig`. The Zig version **1.14.0+** is required.
 
 ```sh
 git clone https://github.com/hideckies/xex
@@ -34,21 +34,13 @@ zig build
 
 <br />
 
-# How To Use
+## Usage
 
 Execute `xex --help` to display the usage. 
 
-### Debugging
+## Dumping File Information
 
-```sh
-xex /bin/ls
-xex example.exe
-
-# Specify the arguments for executable.
-xex /bin/ls -al /
-```
-
-### Dumping File Information
+We can dump file information for static analysis.
 
 ```sh
 # File Information
@@ -70,3 +62,16 @@ xex --symbols /bin/ls
 # Dynamic symbol table
 xex --dynsymbols /bin/ls
 ```
+
+### Debugging
+
+xex also has a feature to debug a program.
+
+```sh
+xex /bin/ls
+xex example.exe
+
+# Specify the arguments for executable.
+xex /bin/ls -al /
+```
+

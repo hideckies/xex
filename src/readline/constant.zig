@@ -17,7 +17,6 @@ pub const HELP =
     \\  functions, funcs            : List all functions.
     \\  disassemble, disas, dis     : Disassemble at specified address.
     // \\  decompile                   : Decompile.
-    // \\  hexdump                     : Dump file bytes as hex.
     \\
     \\BREAKPOINTS
     \\-----------
@@ -29,11 +28,11 @@ pub const HELP =
     \\RUNNING
     \\-------
     \\  continue                    : Continue the program until hitting a breakpoint.
-    \\  step                        : Execute the next line of code.
+    \\  step                        : Step one line of source code.
+    \\  stepi                       : Step one instruction.
     // \\  step over                   : Assembly-level single step.
-    // \\  step                        : Single step N times.
     // \\  next                        : Step over functions.
-    // \\  seek                        : Seek to specified address or function.
+    // \\  jump                        : Go to a specified address or function.
     \\  restart                     : Restart the program with the new child process.
     \\
     \\VALUES
@@ -105,10 +104,6 @@ pub const HELP_DISASSEMBLE =
 //     \\decompile : Decompile.
 // ;
 
-// pub const HELP_HEXDUMP =
-//     \\hexdump   : Dump hex.
-// ;
-
 pub const HELP_BREAKPOINT =
     \\breakpoint, bp [INDEX]    : Display information of breakpoint.
     \\
@@ -146,7 +141,11 @@ pub const HELP_CONTINUE =
 ;
 
 pub const HELP_STEP =
-    \\step  : Execute the next line of code.
+    \\step  : Step one line of source code.
+;
+
+pub const HELP_STEPI =
+    \\stepi  : Step one instruction.
 ;
 
 pub const HELP_RESTART =

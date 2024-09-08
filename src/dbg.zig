@@ -110,7 +110,6 @@ pub const Debugger = struct {
                 readline.CommandType.functions => try handler.analysis.functions(self),
                 readline.CommandType.disassemble => try handler.analysis.disassemble(self, command),
                 // readline.CommandType.decompile => try handler.analysis.decompile(self, command),
-                // readline.CommandType.hexdump => try handler.analysis.hexdump(self, command),
                 // BREAKPOINTS
                 readline.CommandType.breakpoint => try handler.breakpoints.breakpoint(self, command),
                 readline.CommandType.breakpoint_add => try handler.breakpoints.breakpointAdd(self, command),
@@ -119,6 +118,7 @@ pub const Debugger = struct {
                 // RUNNING
                 readline.CommandType.conti => try handler.running.conti(self, &command),
                 readline.CommandType.step => try handler.running.step(self, &command),
+                readline.CommandType.stepi => try handler.running.stepi(self, &command),
                 readline.CommandType.restart => try handler.running.restart(self, &command),
                 // VALUES
                 readline.CommandType.registers => try handler.values.registers(self),
