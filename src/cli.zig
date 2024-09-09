@@ -125,13 +125,4 @@ pub fn parse(allocator: std.mem.Allocator, option: *Option) !void {
     const file_args: ?[*:null]const ?[*:0]const u8 = @ptrCast(std.os.argv[pos_args_start_idx..].ptr);
 
     option.file = try File.init(file_path, file_args);
-
-    // const file = try std.fs.cwd().openFile(option.file_path, .{});
-    // defer file.close();
-    // const reader = file.reader();
-
-    // const file_size = try file.getEndPos();
-    // option.file_buf = try file.readToEndAlloc(std.heap.page_allocator, file_size);
-
-    // option.file_type = try FileType.detect(reader);
 }

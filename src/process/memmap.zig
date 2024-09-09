@@ -1,4 +1,5 @@
 const std = @import("std");
+const stdout = @import("../common.zig").stdout;
 
 const BaseAddrInfo = @import("./base_addr_info.zig").BaseAddrInfo;
 
@@ -42,13 +43,13 @@ pub const MemoryMap = struct {
 
     pub fn init(allocator: std.mem.Allocator, pid: std.posix.pid_t, file_path: []const u8) !Self {
         // Parse memory map.
-        const filepath = try std.fmt.allocPrint(
+        const maps_path = try std.fmt.allocPrint(
             allocator,
             "/proc/{d}/maps",
             .{pid},
         );
 
-        const file = try std.fs.openFileAbsolute(filepath, .{});
+        const file = try std.fs.openFileAbsolute(maps_path, .{});
         defer file.close();
 
         var reader = file.reader();
@@ -108,8 +109,6 @@ pub const MemoryMap = struct {
             ));
         }
 
-        const filename = std.fs.path.basename(file_path);
-
         // Get base addresses for each segment.
         var base_addr_info = BaseAddrInfo{
             .exe_base_addr = null,
@@ -122,7 +121,7 @@ pub const MemoryMap = struct {
         for (memsegs.items) |memseg| {
             if (memseg.path.len > 0) {
                 if (base_addr_info.exe_base_addr == null) {
-                    if (std.mem.containsAtLeast(u8, memseg.path, 1, filename)) {
+                    if (std.mem.containsAtLeast(u8, memseg.path, 1, file_path)) {
                         base_addr_info.exe_base_addr = memseg.start_addr;
                         continue;
                     }
@@ -142,7 +141,7 @@ pub const MemoryMap = struct {
             const memseg = memsegs.items[idx];
             if (memseg.path.len > 0) {
                 if (base_addr_info.exe_end_addr == null) {
-                    if (std.mem.containsAtLeast(u8, memseg.path, 1, filename)) {
+                    if (std.mem.containsAtLeast(u8, memseg.path, 1, file_path)) {
                         base_addr_info.exe_end_addr = memseg.end_addr;
                         continue;
                     }
@@ -193,6 +192,7 @@ pub const MemoryMap = struct {
                 return seg;
             }
         }
+
         return error.IndexError;
     }
 };

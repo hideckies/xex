@@ -224,14 +224,27 @@ pub const File = struct {
     const Self = @This();
 
     pub fn init(path: []const u8, args: ?[*:null]const ?[*:0]const u8) !Self {
-        const file = try std.fs.cwd().openFile(path, .{});
+        const allocator = std.heap.page_allocator;
+        // Get absolute path.
+        const cwd_path = try std.fs.cwd().realpathAlloc(allocator, ".");
+        defer allocator.free(cwd_path);
+        const path_abs = try std.fs.path.resolve(
+            allocator,
+            &.{
+                cwd_path,
+                path,
+            },
+        );
+        defer allocator.free(path_abs);
+
+        const file = try std.fs.cwd().openFile(path_abs, .{});
         defer file.close();
         const reader = file.reader();
         const file_size = try file.getEndPos();
         const file_buf = try file.readToEndAlloc(std.heap.page_allocator, file_size);
 
         return Self{
-            .path = path,
+            .path = try allocator.dupe(u8, path_abs),
             .args = args,
             .buffer = file_buf,
             .type_ = try FileType.detect(reader),

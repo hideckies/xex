@@ -107,7 +107,8 @@ pub fn getFunctions(
 ) ![]Function {
     _ = file_buf;
 
-    const exe_filename = std.fs.path.basename(file_path);
+    const file_name = std.fs.path.basename(file_path);
+
     var memmap = process.memmap;
 
     var funcs = std.ArrayList(Function).init(allocator);
@@ -119,7 +120,7 @@ pub fn getFunctions(
             const dynsymbols = headers.hdrs.ELFHeaders64.dynsymbols;
 
             if (symbols.len > 0) {
-                const memseg = try memmap.findMemSeg(null, exe_filename, 0);
+                const memseg = try memmap.findMemSeg(null, file_name, 0);
                 const exe_base_addr = memseg.start_addr;
 
                 // Find functions from symbol table.
@@ -145,7 +146,7 @@ pub fn getFunctions(
             const dynsymbols = headers.hdrs.ELFHeaders64.dynsymbols;
 
             if (symbols.len > 0) {
-                const memseg = try memmap.findMemSeg(null, exe_filename, 0);
+                const memseg = try memmap.findMemSeg(null, file_name, 0);
                 const exe_base_addr = memseg.start_addr;
 
                 // Find functions from symbol table.
@@ -184,7 +185,7 @@ pub fn getFunctions(
                 // ----------------------------------------------------------------------------------------
                 // WARNING: This implementation is not very accurate
 
-                const memseg = try memmap.findMemSeg(null, exe_filename, 0);
+                const memseg = try memmap.findMemSeg(null, file_name, 0);
                 const exe_base_addr = memseg.start_addr;
 
                 // Add '_start' function if it does not exist.
