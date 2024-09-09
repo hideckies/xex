@@ -113,9 +113,12 @@ pub const MemoryMap = struct {
         // Get base addresses for each segment.
         var base_addr_info = BaseAddrInfo{
             .exe_base_addr = null,
+            .exe_end_addr = null,
             .ld_base_addr = null,
+            .ld_end_addr = null,
         };
 
+        // Find base addresses
         for (memsegs.items) |memseg| {
             if (memseg.path.len > 0) {
                 if (base_addr_info.exe_base_addr == null) {
@@ -127,6 +130,26 @@ pub const MemoryMap = struct {
                 if (base_addr_info.ld_base_addr == null) {
                     if (std.mem.containsAtLeast(u8, memseg.path, 1, "ld-linux")) {
                         base_addr_info.ld_base_addr = memseg.start_addr;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Find end addresses
+        for (memsegs.items, 0..) |_, i| {
+            const idx = memsegs.items.len - 1 - i;
+            const memseg = memsegs.items[idx];
+            if (memseg.path.len > 0) {
+                if (base_addr_info.exe_end_addr == null) {
+                    if (std.mem.containsAtLeast(u8, memseg.path, 1, filename)) {
+                        base_addr_info.exe_end_addr = memseg.end_addr;
+                        continue;
+                    }
+                }
+                if (base_addr_info.ld_end_addr == null) {
+                    if (std.mem.containsAtLeast(u8, memseg.path, 1, "ld-linux")) {
+                        base_addr_info.ld_end_addr = memseg.end_addr;
                         continue;
                     }
                 }

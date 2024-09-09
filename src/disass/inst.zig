@@ -6,6 +6,7 @@ const emoji = @import("../common.zig").emoji;
 const stdout = @import("../common.zig").stdout;
 const symbol = @import("../common.zig").symbol;
 const Breakpoint = @import("../breakpoint.zig").Breakpoint;
+const Function = @import("../func.zig").Function;
 const getOriginalInstByAddr = @import("../breakpoint.zig").getOriginalInstByAddr;
 const ptrace = @import("../process.zig").ptrace;
 
@@ -48,11 +49,19 @@ pub const Instruction = struct {
         pc: usize,
         breakpoints: std.ArrayList(Breakpoint),
         is_hexdump: bool,
+        funcs: []Function,
     ) !void {
         var cham = chameleon.initRuntime(.{ .allocator = allocator });
         defer cham.deinit();
 
-        //
+        // Display the function name if it is the start of the function.
+        for (funcs) |func| {
+            if (func.start_addr == self.addr) {
+                try stdout.print("\n{s}:\n", .{func.name});
+            }
+        }
+
+        // Prepare strings.
         const str_addr = if (self.addr == pc) try cham.black().bgGreenBright().fmt("0x{x:0>16}", .{self.addr}) else try cham.greenBright().fmt("0x{x:0>16}", .{self.addr});
         const str_mnemonic = try cham.yellow().fmt("{s}", .{self.mnemonic});
         const str_op = try cham.cyanBright().fmt("{s}", .{self.op_str});
@@ -81,6 +90,13 @@ pub const Instruction = struct {
                 str_mnemonic,
                 str_op,
             });
+        }
+
+        // Add newline if the address is the end_addr.
+        for (funcs) |func| {
+            if (func.end_addr == self.addr) {
+                try stdout.print("\n", .{});
+            }
         }
     }
 };
@@ -148,6 +164,7 @@ pub fn getInstructions(
     code: [*c]const u8,
     code_size: usize,
     start_addr: usize,
+    end_addr: ?usize,
     breakpoints: std.ArrayList(Breakpoint),
 ) ![]Instruction {
     var insts = std.ArrayList(Instruction).init(allocator);
@@ -228,6 +245,8 @@ pub fn getInstructions(
                 try insts.append(new_inst);
             }
             // -------------------------------------------------------------------------------
+
+            if (end_addr != null and addr >= end_addr.?) break;
         }
         c.cs_free(insn, count);
         return insts.toOwnedSlice();

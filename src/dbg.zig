@@ -43,6 +43,14 @@ pub const Debugger = struct {
             option.file.args.?,
         );
         const breakpoints = std.ArrayList(Breakpoint).init(allocator);
+        const funcs = try func.getFunctions(
+            allocator,
+            process,
+            hdrs,
+            option.file.path,
+            option.file.buffer,
+            breakpoints,
+        );
         return Debugger{
             .allocator = allocator,
             .option = option,
@@ -53,17 +61,11 @@ pub const Debugger = struct {
                 option.file.path,
                 option.file.buffer,
                 option.file.type_,
+                funcs,
             ),
             .running = false,
             .process = process,
-            .funcs = try func.getFunctions(
-                allocator,
-                process,
-                hdrs,
-                breakpoints,
-                option.file.path,
-                option.file.buffer,
-            ),
+            .funcs = funcs,
             .breakpoints = breakpoints,
         };
     }
@@ -117,8 +119,8 @@ pub const Debugger = struct {
                 readline.CommandType.breakpoints => try handler.breakpoints.breakpoints(self),
                 // RUNNING
                 readline.CommandType.conti => try handler.running.conti(self, &command),
-                readline.CommandType.step => try handler.running.step(self, &command),
                 readline.CommandType.stepi => try handler.running.stepi(self, &command),
+                readline.CommandType.steps => try handler.running.steps(self, &command),
                 readline.CommandType.restart => try handler.running.restart(self, &command),
                 // VALUES
                 readline.CommandType.registers => try handler.values.registers(self),

@@ -33,8 +33,8 @@ pub const CommandType = enum {
 
     // RUNNING
     conti, // *the word 'continue' is reserved.
-    step,
     stepi,
+    steps,
     restart,
 
     // VALUES
@@ -92,10 +92,10 @@ pub const CommandType = enum {
             return CommandType.breakpoints;
         } else if (std.mem.eql(u8, command, "continue")) {
             return CommandType.conti;
-        } else if (std.mem.eql(u8, command, "step")) {
-            return CommandType.step;
         } else if (std.mem.eql(u8, command, "stepi")) {
             return CommandType.stepi;
+        } else if (std.mem.eql(u8, command, "steps")) {
+            return CommandType.steps;
         } else if (std.mem.eql(u8, command, "restart")) {
             return CommandType.restart;
         } else if (std.mem.eql(u8, command, "registers") or std.mem.eql(u8, command, "regs")) {
@@ -191,10 +191,10 @@ pub const Command = struct {
             try stdout.print("{s}\n", .{constant.HELP_BREAKPOINTS});
         } else if (std.mem.eql(u8, command_name, "continue")) {
             try stdout.print("{s}\n", .{constant.HELP_CONTINUE});
-        } else if (std.mem.eql(u8, command_name, "step")) {
-            try stdout.print("{s}\n", .{constant.HELP_STEP});
         } else if (std.mem.eql(u8, command_name, "stepi")) {
             try stdout.print("{s}\n", .{constant.HELP_STEPI});
+        } else if (std.mem.eql(u8, command_name, "steps")) {
+            try stdout.print("{s}\n", .{constant.HELP_STEPS});
         } else if (std.mem.eql(u8, command_name, "restart")) {
             try stdout.print("{s}\n", .{constant.HELP_RESTART});
         } else if (std.mem.eql(u8, command_name, "registers") or std.mem.eql(u8, command_name, "regs")) {

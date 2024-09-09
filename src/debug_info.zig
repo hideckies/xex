@@ -1,5 +1,7 @@
 const std = @import("std");
+const stdout = @import("./common/stdout.zig");
 const FileType = @import("./file.zig").FileType;
+const Function = @import("./func.zig").Function;
 
 pub const DebugInfo = struct {
     allocator: std.mem.Allocator,
@@ -13,6 +15,7 @@ pub const DebugInfo = struct {
         file_path: []const u8,
         file_buf: []const u8,
         file_type: FileType,
+        funcs: []Function,
     ) !Self {
         _ = file_buf;
 
@@ -27,6 +30,24 @@ pub const DebugInfo = struct {
                     &sections,
                     null,
                 ) catch null;
+
+                // Update pc_range of functions.
+                const dwarf = debug_info.?.dwarf;
+                const func_list = dwarf.func_list;
+                for (func_list.items) |*func| {
+                    if (func.pc_range == null) {
+                        // Find target functions.
+                        for (funcs) |f| {
+                            if (std.mem.eql(u8, f.name, func.name.?)) {
+                                func.pc_range = .{
+                                    .start = f.start_addr - f.base_addr,
+                                    .end = f.end_addr - f.base_addr,
+                                };
+                            }
+                        }
+                    }
+                }
+
                 return Self{
                     .allocator = allocator,
                     .elf = debug_info,
@@ -68,8 +89,5 @@ pub const DebugInfo = struct {
 // try stdout.print("dwarf abbrev_table_list: {any}\n", .{dwarf.abbrev_table_list.items});
 // try stdout.print("dwarf compile unit list: {any}\n", .{dwarf.compile_unit_list.items});
 // try stdout.print("dwarf func list: {any}\n", .{dwarf.func_list.items});
-// try stdout.print("dwarf cie map: {any}\n", .{dwarf.cie_map.entries});
-// try stdout.print("dwarf fde_list: {any}\n", .{dwarf.fde_list.items});
-// try stdout.print("dwarf ranges: {any}\n", .{dwarf.ranges.items});
 // try stdout.print("mapped_memory: {x}\n", .{dwarf.mapped_memory});
 // ----------------------------------------------------------------

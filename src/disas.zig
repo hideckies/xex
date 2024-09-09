@@ -8,7 +8,7 @@ const TRAP_INST_MASK = @import("./common.zig").types.TRAP_INST_MASK;
 const util = @import("./common.zig").util;
 const Breakpoint = @import("./breakpoint.zig").Breakpoint;
 const getOriginalInstByAddr = @import("./breakpoint.zig").getOriginalInstByAddr;
-// const Function = @import("./func.zig").Function;
+const Function = @import("./func.zig").Function;
 const ptrace = @import("./process.zig").ptrace;
 
 pub const Instruction = @import("./disass/inst.zig").Instruction;
@@ -20,13 +20,28 @@ pub fn disassemble(
     breakpoints: std.ArrayList(Breakpoint),
     target_addr: usize,
     lines: usize,
+    funcs: ?[]Function,
 ) ![]Instruction {
     const size: usize = @sizeOf(usize) * lines; // 128;
+
+    var start_addr: usize = target_addr;
+    var end_addr: usize = 0;
+
+    // If the target address is in range of a function, set the addresses.
+    if (funcs != null) {
+        for (funcs.?) |func| {
+            if (func.start_addr <= target_addr and target_addr <= func.end_addr) {
+                start_addr = func.start_addr;
+                end_addr = func.end_addr;
+                break;
+            }
+        }
+    }
 
     var buffer: []u8 = allocator.alloc(u8, size) catch |err| {
         return err;
     };
-    var current_addr = target_addr;
+    var current_addr = start_addr;
     var idx: usize = 0;
     while (idx < size) : (idx += @sizeOf(usize)) {
         var data: usize = 0;
@@ -61,7 +76,8 @@ pub fn disassemble(
         allocator,
         buffer_c,
         buffer.len,
-        target_addr, // start_addr,
+        start_addr, // target_addr,
+        if (end_addr > 0) end_addr else null,
         breakpoints,
     ) catch |err| {
         return err;
@@ -73,7 +89,7 @@ pub fn displayInstructions(
     allocator: std.mem.Allocator,
     instructions: []Instruction,
     pid: i32,
-    // funcs: []Function,
+    funcs: []Function,
     breakpoints: std.ArrayList(Breakpoint),
     lines: usize, // number of lines to display.
     is_hexdump: bool,
@@ -83,15 +99,37 @@ pub fn displayInstructions(
     for (instructions, 0..) |inst, i| {
         if (i + 1 > lines) break;
 
-        // Display the function name if it is the start of the function.
-        // for (funcs) |func| {
-        //     if (func.addr == inst.addr) {
-        //         try stdout.print("{s}:\n", .{func.name});
-        //     }
-        // }
-
-        inst.display(allocator, pc, breakpoints, is_hexdump) catch {
+        inst.display(allocator, pc, breakpoints, is_hexdump, funcs) catch {
             try stdout.print("<unknown>\n", .{});
         };
     }
+}
+
+pub fn findFuncStartAddr(
+    instructions: []Instruction,
+) !usize {
+    for (instructions) |inst| {
+        if (std.mem.containsAtLeast(u8, inst.mnemonic, 1, "endbr")) {
+            return inst.addr;
+        }
+    }
+    return error.FuncStartAddrNotFound;
+}
+
+pub fn findFuncEndAddr(
+    instructions: []Instruction,
+) !usize {
+    var prev_addr: usize = 0;
+    for (instructions) |inst| {
+        if (prev_addr > 0) {
+            if (std.mem.containsAtLeast(u8, inst.mnemonic, 1, "endbr")) {
+                return prev_addr;
+            }
+        }
+        if (std.mem.eql(u8, inst.mnemonic, "ret")) {
+            return inst.addr;
+        }
+        prev_addr = inst.addr;
+    }
+    return error.FuncEndAddrNotFound;
 }

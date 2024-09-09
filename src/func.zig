@@ -10,18 +10,18 @@ const ELFHeader64 = @import("./headers.zig").elf.elf64.ELFHeader64;
 const ELFSectionHeader64 = @import("./headers.zig").elf.elf64.ELFSectionHeader64;
 const decode_elf = @import("./headers.zig").elf.decode;
 const Process = @import("./process.zig").Process;
+const disas = @import("./disas.zig");
 
 const c = @cImport({
     @cInclude("dlfcn.h");
     @cInclude("unistd.h");
 });
 
-const LIBC_PATH = "/lib/x86_64-linux-gnu/libc.so.6";
-const LIBC_PATH_2 = "/usr/lib/x86_64-linux-gnu/libc.so.6";
-
 pub const Function = struct {
     name: []const u8,
-    addr: usize,
+    base_addr: usize,
+    start_addr: usize,
+    end_addr: usize,
 
     const Self = @This();
 
@@ -35,16 +35,19 @@ pub const Function = struct {
         var cham = chameleon.initRuntime(.{ .allocator = allocator });
         defer cham.deinit();
 
-        return writer.print("{s}\t{s}", .{
-            try cham.greenBright().fmt("0x{x}", .{self.addr}),
+        return writer.print("{s}-{s}\t{s}", .{
+            try cham.greenBright().fmt("0x{x}", .{self.start_addr}),
+            try cham.greenBright().fmt("0x{x}", .{self.end_addr}),
             try cham.yellow().fmt("{s}", .{self.name}),
         });
     }
 
-    pub fn init(name: []const u8, addr: usize) Self {
+    pub fn init(name: []const u8, base_addr: usize, start_addr: usize, end_addr: usize) Self {
         return Self{
             .name = name,
-            .addr = addr,
+            .base_addr = base_addr,
+            .start_addr = start_addr,
+            .end_addr = end_addr,
         };
     }
 };
@@ -52,7 +55,7 @@ pub const Function = struct {
 // Helper functions for sorting functions.
 fn cmpByFuncAddr(context: void, a: Function, b: Function) bool {
     _ = context;
-    if (a.addr < b.addr) {
+    if (a.start_addr < b.start_addr) {
         return true;
     } else {
         return false;
@@ -98,16 +101,14 @@ pub fn getFunctions(
     allocator: std.mem.Allocator,
     process: Process,
     headers: Headers,
-    breakpoints: std.ArrayList(Breakpoint),
     file_path: []const u8,
     file_buf: []const u8,
+    breakpoints: std.ArrayList(Breakpoint),
 ) ![]Function {
+    _ = file_buf;
+
     const exe_filename = std.fs.path.basename(file_path);
     var memmap = process.memmap;
-
-    // const exe_base_addr = process.memmap.base_addr_info.exe_base_addr.?;
-    // const ld_base_addr = process.memmap.base_addr_info.ld_base_addr.?;
-    _ = breakpoints;
 
     var funcs = std.ArrayList(Function).init(allocator);
     defer funcs.deinit();
@@ -115,6 +116,8 @@ pub fn getFunctions(
     switch (headers.hdrs) {
         .ELFHeaders32 => {
             const symbols = headers.hdrs.ELFHeaders32.symbols;
+            const dynsymbols = headers.hdrs.ELFHeaders64.dynsymbols;
+
             if (symbols.len > 0) {
                 const memseg = try memmap.findMemSeg(null, exe_filename, 0);
                 const exe_base_addr = memseg.start_addr;
@@ -124,10 +127,16 @@ pub fn getFunctions(
                 defer func_symbols_tmp.deinit();
                 for (symbols) |symbol| {
                     if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
-                        try funcs.append(Function.init(symbol.st_name_str, exe_base_addr + symbol.st_value));
+                        try funcs.append(Function.init(
+                            symbol.st_name_str,
+                            exe_base_addr,
+                            exe_base_addr + symbol.st_value,
+                            exe_base_addr + symbol.st_value + symbol.st_size,
+                        ));
                     }
                 }
-            } else {
+            }
+            if (dynsymbols.len > 0) {
                 // TODO
             }
         },
@@ -142,23 +151,52 @@ pub fn getFunctions(
                 // Find functions from symbol table.
                 var func_symbols_tmp = std.ArrayList(ELF64_Sym).init(allocator);
                 defer func_symbols_tmp.deinit();
+
                 for (symbols) |symbol| {
                     if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
-                        try funcs.append(Function.init(symbol.st_name_str, exe_base_addr + symbol.st_value));
+                        if (symbol.st_value == 0) continue;
+
+                        // Get the start address of the function.
+                        const func_start_addr = exe_base_addr + symbol.st_value;
+
+                        // Get the end address of the function.
+                        const insts = try disas.disassemble(
+                            allocator,
+                            process.pid,
+                            breakpoints,
+                            func_start_addr,
+                            300,
+                            null,
+                        );
+                        const func_end_addr = try disas.findFuncEndAddr(insts);
+
+                        try funcs.append(Function.init(
+                            symbol.st_name_str,
+                            exe_base_addr,
+                            func_start_addr,
+                            func_end_addr,
+                        ));
                     }
                 }
-            } else if (dynsymbols.len > 0) {
+            }
+
+            if (dynsymbols.len > 0) {
                 // ----------------------------------------------------------------------------------------
                 // WARNING: This implementation is not very accurate
 
                 const memseg = try memmap.findMemSeg(null, exe_filename, 0);
                 const exe_base_addr = memseg.start_addr;
-                // const memseg_x = try memmap.findMemSeg("r-xp", exe_filename, 0);
-                // const exe_x_base_addr = memseg_x.start_addr;
 
-                // Add '_start' function.
-                const entry_offset = headers.hdrs.ELFHeaders64.file_header.e_entry;
-                try funcs.append(Function.init("_start", exe_base_addr + entry_offset));
+                // Add '_start' function if it does not exist.
+                if (symbols.len == 0) {
+                    const entry_offset = headers.hdrs.ELFHeaders64.file_header.e_entry;
+                    try funcs.append(Function.init(
+                        "_start",
+                        exe_base_addr,
+                        exe_base_addr + entry_offset,
+                        exe_base_addr + entry_offset, // TODO
+                    ));
+                }
 
                 // Get the GOT address & entry size from `.plt.got` section.
                 const section_headers = headers.hdrs.ELFHeaders64.section_headers;
@@ -176,40 +214,47 @@ pub fn getFunctions(
                         got_addr = sh.sh_addr;
                     }
                 }
+
                 // Resolve function addresses using GOT address.
                 var idx: usize = 0;
                 for (dynsymbols) |symbol| {
                     // Check if the symbol type is FUNC.
                     if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
-                        if (std.mem.eql(u8, symbol.st_name_str, "__libc_start_main")) continue;
+                        if (std.mem.eql(u8, symbol.st_name_str, "__libc_start_main")) continue; // TODO: How to treat the '__libc_start_main'?
 
-                        var func_addr: usize = undefined;
+                        var func_start_addr: usize = 0;
                         if (symbol.st_value == 0) {
-                            // func_addr = exe_base_addr + plt_got_addr + 0x20 + (plt_got_entsize * idx);
-                            // func_addr = exe_base_addr + plt_got_addr + plt_got_entsize * (idx + 1);
-                            // func_addr = exe_base_addr + plt_got_addr + 0x10 + plt_got_entsize * (idx + 1);
-                            func_addr = exe_base_addr + plt_got_addr + plt_got_size + (plt_got_entsize * idx);
+                            func_start_addr = exe_base_addr + plt_got_addr + plt_got_size + (plt_got_entsize * idx);
                         } else {
-                            func_addr = exe_base_addr + symbol.st_value;
+                            func_start_addr = exe_base_addr + symbol.st_value;
                         }
-                        try funcs.append(Function.init(symbol.st_name_str, func_addr));
+
+                        const func_end_addr = func_start_addr + plt_got_size;
+
+                        try funcs.append(Function.init(
+                            symbol.st_name_str,
+                            exe_base_addr,
+                            func_start_addr,
+                            func_end_addr,
+                        ));
                         idx += 1;
                     }
                 }
                 // ----------------------------------------------------------------------------------------
-            } else {
-                // Find functions by parsing .text section.
-                const section_headers = headers.hdrs.ELFHeaders64.section_headers;
-                const text_data = try findTextSectionData(file_buf, section_headers);
-                const start_offsets = try findFuncStartOffsets(allocator, text_data);
-                try stdout.print("start_offsets len: {d}\n", .{start_offsets.len});
-                if (start_offsets.len > 0) {
-                    for (start_offsets) |offset| {
-                        const func_addr = headers.hdrs.ELFHeaders64.file_header.e_entry + offset;
-                        try stdout.print("func_addr: 0x{x}\n", .{func_addr});
-                    }
-                }
             }
+
+            // {
+            //     // Find functions by parsing .text section.
+            //     const section_headers = headers.hdrs.ELFHeaders64.section_headers;
+            //     const text_data = try findTextSectionData(file_buf, section_headers);
+            //     const start_offsets = try findFuncStartOffsets(allocator, text_data);
+            //     if (start_offsets.len > 0) {
+            //         for (start_offsets) |offset| {
+            //             const func_addr = headers.hdrs.ELFHeaders64.file_header.e_entry + offset;
+            //             _ = func_addr;
+            //         }
+            //     }
+            // }
         },
         .PEHeaders32 => {
             // TODO

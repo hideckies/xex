@@ -24,11 +24,11 @@ pub fn restart(dbg: *Debugger, cmd: *Command) !void {
     // Refetch functions.
     dbg.funcs = try func.getFunctions(
         dbg.allocator,
-        new_process, // new_process.memmap.base_addr_info.exe_base_addr,
+        new_process,
         dbg.headers,
-        dbg.breakpoints,
         dbg.option.file.path,
         dbg.option.file.buffer,
+        dbg.breakpoints,
     );
 
     cmd.pid = new_process.pid;
@@ -64,46 +64,86 @@ pub fn conti(dbg: *Debugger, cmd: *Command) !void {
     }
 }
 
-pub fn step(dbg: *Debugger, cmd: *Command) !void {
+pub fn stepi(dbg: *Debugger, cmd: *Command) !void {
     const allocator = std.heap.page_allocator;
 
-    var pc = try ptrace.readRegister(dbg.process.pid, "pc");
-    var dwarf = dbg.debug_info.elf.?.dwarf;
-    const compile_unit = try dwarf.findCompileUnit(pc);
-    try stdout.print("compile_unit: {}\n", .{compile_unit});
-    const line_info = try dwarf.getLineNumberInfo(allocator, compile_unit, pc);
+    // Step n times.
+    var n: usize = 1;
+    if (cmd.command_args.items.len == 1) {
+        n = std.fmt.parseInt(usize, cmd.command_args.items[0], 10) catch |err| {
+            return stdout.print_error(allocator, "Invalid argument: {}\n", .{err});
+        };
+    } else if (cmd.command_args.items.len > 1) {
+        return stdout.print_error(allocator, "Too many arguments.\n", .{});
+    }
 
-    while (true) {
-        try stepi(dbg, cmd);
+    const pc = try ptrace.readRegister(dbg.process.pid, "pc");
 
-        pc = try ptrace.readRegister(dbg.process.pid, "pc");
-        const new_line_info = try dwarf.getLineNumberInfo(allocator, compile_unit, pc);
-        if (std.meta.eql(new_line_info, line_info)) {
-            break;
+    while (n > 0) : (n -= 1) {
+        var bp_reached: bool = false;
+        for (dbg.breakpoints.items) |*bp| {
+            if (bp.addr == pc) {
+                bp_reached = true;
+                if (try bp.reset()) {
+                    try restart(dbg, cmd);
+                }
+                break;
+            }
+        }
+
+        if (!bp_reached) {
+            const status = try ptrace.singleStep(dbg.process.pid);
+            switch (status) {
+                .SignalTrap => return,
+                .ProcessExited => try restart(dbg, cmd),
+                else => return error.WaitError,
+            }
         }
     }
 }
 
-pub fn stepi(dbg: *Debugger, cmd: *Command) !void {
-    const pc = try ptrace.readRegister(dbg.process.pid, "pc");
+pub fn steps(dbg: *Debugger, cmd: *Command) !void {
+    const allocator = std.heap.page_allocator;
 
-    var bp_reached: bool = false;
-    for (dbg.breakpoints.items) |*bp| {
-        if (bp.addr == pc) {
-            bp_reached = true;
-            if (try bp.reset()) {
-                try restart(dbg, cmd);
-            }
-            break;
-        }
+    // Step n times.
+    var n: usize = 1;
+    if (cmd.command_args.items.len == 1) {
+        n = std.fmt.parseInt(usize, cmd.command_args.items[0], 10) catch |err| {
+            return stdout.print_error(allocator, "Invalid argument: {}\n", .{err});
+        };
+    } else if (cmd.command_args.items.len > 1) {
+        return stdout.print_error(allocator, "Too many arguments.\n", .{});
     }
 
-    if (!bp_reached) {
-        const status = try ptrace.singleStep(dbg.process.pid);
-        switch (status) {
-            .SignalTrap => return,
-            .ProcessExited => try restart(dbg, cmd),
-            else => return error.WaitError,
+    var dwarf = dbg.debug_info.elf.?.dwarf;
+
+    while (n > 0) : (n -= 1) {
+        var pc_offset = try dbg.process.memmap.base_addr_info.getOffset(
+            try ptrace.readRegister(dbg.process.pid, "pc"),
+        );
+        const compile_unit = dwarf.findCompileUnit(pc_offset) catch |err| {
+            return stdout.print_error(allocator, "Failed to step source: {}\n", .{err});
+        };
+        const line_info = dwarf.getLineNumberInfo(allocator, compile_unit, pc_offset) catch |err| {
+            return stdout.print_error(allocator, "Failed to step source: {}\n", .{err});
+        };
+
+        while (true) {
+            try stepi(dbg, cmd);
+
+            pc_offset = try dbg.process.memmap.base_addr_info.getOffset(
+                try ptrace.readRegister(dbg.process.pid, "pc"),
+            );
+            const new_line_info = dwarf.getLineNumberInfo(allocator, compile_unit, pc_offset) catch |err| {
+                return stdout.print_error(allocator, "Failed to step source: {}\n", .{err});
+            };
+
+            if ((new_line_info.line == line_info.line) and
+                (new_line_info.column == line_info.column) and
+                (std.mem.eql(u8, new_line_info.file_name, line_info.file_name)))
+            {
+                break;
+            }
         }
     }
 }

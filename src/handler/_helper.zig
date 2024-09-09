@@ -10,7 +10,7 @@ pub fn getAddrFromArg(dbg: *Debugger, arg: []const u8) !usize {
     // Find function address at first.
     const target_func = findFuncByName(dbg.funcs, arg) catch null;
     if (target_func) |func| {
-        return func.addr;
+        return func.start_addr;
     }
 
     // Get absolute address from hex.

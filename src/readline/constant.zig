@@ -28,8 +28,8 @@ pub const HELP =
     \\RUNNING
     \\-------
     \\  continue                    : Continue the program until hitting a breakpoint.
-    \\  step                        : Step one line of source code.
-    \\  stepi                       : Step one instruction.
+    \\  stepi                       : Step instructions.
+    \\  steps                       : Step source lines.
     // \\  step over                   : Assembly-level single step.
     // \\  next                        : Step over functions.
     // \\  jump                        : Go to a specified address or function.
@@ -128,8 +128,8 @@ pub const HELP_BREAKPOINT_DEL =
     \\
     \\EXAMPLE
     \\-------
-    \\  breakpoint- 0   : Delete 0th breakpoint.
-    \\  bp- 0           : Same as above.
+    \\  breakpoint- 1   : Delete the 1st breakpoint.
+    \\  bp- 1           : Same as above.
 ;
 
 pub const HELP_BREAKPOINTS =
@@ -140,12 +140,22 @@ pub const HELP_CONTINUE =
     \\continue  : Continue the program until hitting a breakpoint.
 ;
 
-pub const HELP_STEP =
-    \\step  : Step one line of source code.
+pub const HELP_STEPI =
+    \\stepi [NUM]   : Step instructions.
+    \\
+    \\EXAMPLE
+    \\-------
+    \\  stepi       : Step one instruction.
+    \\  stepi 3     : Step three instructions.
 ;
 
-pub const HELP_STEPI =
-    \\stepi  : Step one instruction.
+pub const HELP_STEPS =
+    \\steps [NUM]   : Step source lines.
+    \\
+    \\EXAMPLE
+    \\-------
+    \\  steps       : Step one source line.
+    \\  steps 3     : Step three source lines.
 ;
 
 pub const HELP_RESTART =

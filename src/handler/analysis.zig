@@ -53,7 +53,7 @@ pub fn functions(dbg: *Debugger) !void {
 pub fn disassemble(dbg: *Debugger, cmd: Command) !void {
     // Determine target address
     var addr: usize = 0;
-    var lines: usize = 10; // Number of lines to display.
+    var lines: usize = 100; // Number of lines to display.
     if (cmd.command_args.items.len == 0) {
         // Set PC to target address.
         addr = ptrace.readRegister(dbg.process.pid, "pc") catch |err| {
@@ -80,6 +80,7 @@ pub fn disassemble(dbg: *Debugger, cmd: Command) !void {
         dbg.breakpoints,
         addr,
         lines,
+        dbg.funcs,
     ) catch |err| {
         return stdout.print_error(dbg.allocator, "error: {}\n", .{err});
     };
@@ -87,7 +88,7 @@ pub fn disassemble(dbg: *Debugger, cmd: Command) !void {
         dbg.allocator,
         insts,
         dbg.process.pid,
-        // dbg.funcs,
+        dbg.funcs,
         dbg.breakpoints,
         lines,
         false,
