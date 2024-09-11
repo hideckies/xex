@@ -19,6 +19,7 @@ const c = @cImport({
 });
 
 pub const Instruction = struct {
+    allocator: std.mem.Allocator,
     addr: usize,
     size: usize,
     bytes: []const u8,
@@ -28,6 +29,7 @@ pub const Instruction = struct {
     const Self = @This();
 
     pub fn init(
+        allocator: std.mem.Allocator,
         addr: usize,
         size: usize,
         bytes: []const u8,
@@ -35,6 +37,7 @@ pub const Instruction = struct {
         op_str: []const u8,
     ) Self {
         return Self{
+            .allocator = allocator,
             .addr = addr,
             .size = size,
             .bytes = bytes,
@@ -43,15 +46,23 @@ pub const Instruction = struct {
         };
     }
 
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.bytes);
+        self.allocator.free(self.mnemonic);
+        self.allocator.free(self.op_str);
+    }
+
     pub fn display(
         self: Self,
-        allocator: std.mem.Allocator,
         pc: usize,
         breakpoints: std.ArrayList(Breakpoint),
-        is_hexdump: bool,
         funcs: []Function,
     ) !void {
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         // Display the function name if it is the start of the function.
@@ -66,31 +77,12 @@ pub const Instruction = struct {
         const str_mnemonic = try cham.yellow().fmt("{s}", .{self.mnemonic});
         const str_op = try cham.cyanBright().fmt("{s}", .{self.op_str});
 
-        if (is_hexdump) {
-            // hexdump
-            var str_bytes_arr = std.ArrayList([]const u8).init(allocator);
-            defer str_bytes_arr.deinit();
-            for (self.bytes) |byte| {
-                const str_byte = try std.fmt.allocPrint(allocator, "{x:0>2}", .{byte});
-                try str_bytes_arr.append(str_byte);
-            }
-            const str_bytes = try cham.white().fmt("{s}", .{try std.mem.join(allocator, " ", str_bytes_arr.items)});
-
-            try stdout.print("{s}{s}\t{s}\t{s}\t{s}\n", .{
-                try makeMarker(allocator, self.addr, breakpoints),
-                str_addr,
-                str_bytes,
-                str_mnemonic,
-                str_op,
-            });
-        } else {
-            try stdout.print("{s}{s}\t{s}\t{s}\n", .{
-                try makeMarker(allocator, self.addr, breakpoints),
-                str_addr,
-                str_mnemonic,
-                str_op,
-            });
-        }
+        try stdout.print("{s}{s}\t{s}\t{s}\n", .{
+            try makeMarker(arena_allocator, self.addr, breakpoints),
+            str_addr,
+            str_mnemonic,
+            str_op,
+        });
 
         // Add newline if the address is the end_addr.
         for (funcs) |func| {
@@ -102,12 +94,11 @@ pub const Instruction = struct {
 };
 
 fn getSingleInstruction(
+    allocator: std.mem.Allocator,
     code: [*c]const u8,
     code_size: usize,
     start_addr: usize,
 ) !Instruction {
-    const allocator = std.heap.page_allocator;
-
     var handle: c.csh = 0;
     defer _ = c.cs_close(&handle);
     const err = c.cs_open(c.CS_ARCH_X86, c.CS_MODE_64, &handle);
@@ -129,11 +120,9 @@ fn getSingleInstruction(
         const addr = insn[0].address;
         const size = insn[0].size;
 
-        // Truncate characters after null-terminator
         const bytes = insn[0].bytes;
-        // var bytes_size: usize = 0;
-        // while (bytes[bytes_size] != 0 and bytes_size < 16) : (bytes_size += 1) {}
 
+        // Truncate characters after null-terminator
         const mnemonic = insn[0].mnemonic;
         var mnemonic_size: usize = 0;
         while (mnemonic[mnemonic_size] != 0) : (mnemonic_size += 1) {}
@@ -144,6 +133,7 @@ fn getSingleInstruction(
 
         c.cs_free(insn, count);
         return Instruction.init(
+            allocator,
             addr,
             size,
             try allocator.dupe(u8, bytes[0..]),
@@ -207,6 +197,7 @@ pub fn getInstructions(
             while (op_str[op_str_size] != 0) : (op_str_size += 1) {}
 
             const new_inst = Instruction.init(
+                allocator,
                 addr,
                 size,
                 try allocator.dupe(u8, bytes[0..]),
@@ -222,6 +213,7 @@ pub fn getInstructions(
                 var buffer: []u8 = allocator.alloc(u8, orig_code_size) catch |e| {
                     return e;
                 };
+                defer allocator.free(buffer);
                 // Convert usize to []u8 (adjust little-endian)
                 var data_bytes: [@sizeOf(usize)]u8 = undefined;
                 var k: usize = 0;
@@ -236,6 +228,7 @@ pub fn getInstructions(
                 const buffer_c = &buffer[0];
 
                 const orig_inst = try getSingleInstruction(
+                    allocator,
                     buffer_c,
                     orig_code_size,
                     addr,

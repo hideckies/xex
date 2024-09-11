@@ -25,4 +25,8 @@ pub const Process = struct {
             .memmap = memmap,
         };
     }
+
+    pub fn deinit(self: *Self) void {
+        self.memmap.deinit();
+    }
 };

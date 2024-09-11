@@ -33,15 +33,16 @@ pub const DebugInfo = struct {
 
                 // Update pc_range of functions.
                 const dwarf = debug_info.?.dwarf;
-                const func_list = dwarf.func_list;
-                for (func_list.items) |*func| {
-                    if (func.pc_range == null) {
+                const dwarf_func_list = dwarf.func_list;
+                for (dwarf_func_list.items) |*dwarf_func| {
+                    if (dwarf_func.pc_range == null) {
                         // Find target functions.
-                        for (funcs) |f| {
-                            if (std.mem.eql(u8, f.name, func.name.?)) {
-                                func.pc_range = .{
-                                    .start = f.start_addr - f.base_addr,
-                                    .end = f.end_addr - f.base_addr,
+                        for (funcs) |func| {
+                            try stdout.print("{s}\n", .{func});
+                            if (std.mem.eql(u8, func.name, dwarf_func.name.?)) {
+                                dwarf_func.pc_range = .{
+                                    .start = func.start_addr - func.base_addr,
+                                    .end = func.end_addr - func.base_addr,
                                 };
                             }
                         }
@@ -72,8 +73,10 @@ pub const DebugInfo = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        // self.elf.deinit(self.allocator);
-        self.elf.deinit();
+        if (self.elf) |*elf| {
+            // self.allocator.free(elf);
+            elf.deinit(self.allocator);
+        }
     }
 };
 

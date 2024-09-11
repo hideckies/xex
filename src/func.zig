@@ -10,7 +10,7 @@ const ELFHeader64 = @import("./headers.zig").elf.elf64.ELFHeader64;
 const ELFSectionHeader64 = @import("./headers.zig").elf.elf64.ELFSectionHeader64;
 const decode_elf = @import("./headers.zig").elf.decode;
 const Process = @import("./process.zig").Process;
-const disas = @import("./disas.zig");
+const Disas = @import("./disas.zig").Disas;
 
 const c = @cImport({
     @cInclude("dlfcn.h");
@@ -18,6 +18,7 @@ const c = @cImport({
 });
 
 pub const Function = struct {
+    allocator: std.mem.Allocator,
     name: []const u8,
     base_addr: usize,
     start_addr: usize,
@@ -31,8 +32,11 @@ pub const Function = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         return writer.print("{s}-{s}\t{s}", .{
@@ -42,8 +46,15 @@ pub const Function = struct {
         });
     }
 
-    pub fn init(name: []const u8, base_addr: usize, start_addr: usize, end_addr: usize) Self {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        name: []const u8,
+        base_addr: usize,
+        start_addr: usize,
+        end_addr: usize,
+    ) Self {
         return Self{
+            .allocator = allocator,
             .name = name,
             .base_addr = base_addr,
             .start_addr = start_addr,
@@ -73,29 +84,29 @@ fn findTextSectionData(file_buf: []const u8, section_headers: []ELFSectionHeader
 }
 
 // Helper function to find a function start offset.
-fn findFuncStartOffsets(
-    allocator: std.mem.Allocator,
-    text_section_data: []const u8,
-) ![]usize {
-    const func_start_pattern: []const u8 = &[_]u8{ 0x55, 0x48, 0x89, 0xe5 }; // push rbp; mov rbp, rsp
+// fn findFuncStartOffsets(
+//     allocator: std.mem.Allocator,
+//     text_section_data: []const u8,
+// ) ![]usize {
+//     const func_start_pattern: []const u8 = &[_]u8{ 0x55, 0x48, 0x89, 0xe5 }; // push rbp; mov rbp, rsp
 
-    var start_offsets = std.ArrayList(usize).init(allocator);
-    defer start_offsets.deinit();
+//     var start_offsets = std.ArrayList(usize).init(allocator);
+//     defer start_offsets.deinit();
 
-    for (text_section_data, 0..) |byte, i| {
-        _ = byte;
-        if (i + func_start_pattern.len <= text_section_data.len) {
-            const slice = text_section_data[i .. i + func_start_pattern.len];
-            if (std.mem.eql(u8, slice, func_start_pattern)) {
-                try start_offsets.append(i);
-            }
-        }
-    }
-    if (start_offsets.items.len > 0) {
-        return start_offsets.toOwnedSlice();
-    }
-    return error.FunctionStartOffsetNotFound;
-}
+//     for (text_section_data, 0..) |byte, i| {
+//         _ = byte;
+//         if (i + func_start_pattern.len <= text_section_data.len) {
+//             const slice = text_section_data[i .. i + func_start_pattern.len];
+//             if (std.mem.eql(u8, slice, func_start_pattern)) {
+//                 try start_offsets.append(i);
+//             }
+//         }
+//     }
+//     if (start_offsets.items.len > 0) {
+//         return start_offsets.toOwnedSlice();
+//     }
+//     return error.FunctionStartOffsetNotFound;
+// }
 
 pub fn getFunctions(
     allocator: std.mem.Allocator,
@@ -129,6 +140,7 @@ pub fn getFunctions(
                 for (symbols) |symbol| {
                     if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
                         try funcs.append(Function.init(
+                            allocator,
                             symbol.st_name_str,
                             exe_base_addr,
                             exe_base_addr + symbol.st_value,
@@ -150,8 +162,8 @@ pub fn getFunctions(
                 const exe_base_addr = memseg.start_addr;
 
                 // Find functions from symbol table.
-                var func_symbols_tmp = std.ArrayList(ELF64_Sym).init(allocator);
-                defer func_symbols_tmp.deinit();
+                // var func_symbols_tmp = std.ArrayList(ELF64_Sym).init(allocator);
+                // defer func_symbols_tmp.deinit();
 
                 for (symbols) |symbol| {
                     if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
@@ -161,7 +173,7 @@ pub fn getFunctions(
                         const func_start_addr = exe_base_addr + symbol.st_value;
 
                         // Get the end address of the function.
-                        const insts = try disas.disassemble(
+                        var disas = try Disas.init(
                             allocator,
                             process.pid,
                             breakpoints,
@@ -169,9 +181,11 @@ pub fn getFunctions(
                             300,
                             null,
                         );
-                        const func_end_addr = try disas.findFuncEndAddr(insts);
+                        defer disas.deinit();
+                        const func_end_addr = try disas.findFuncEndAddr();
 
                         try funcs.append(Function.init(
+                            allocator,
                             symbol.st_name_str,
                             exe_base_addr,
                             func_start_addr,
@@ -192,6 +206,7 @@ pub fn getFunctions(
                 if (symbols.len == 0) {
                     const entry_offset = headers.hdrs.ELFHeaders64.file_header.e_entry;
                     try funcs.append(Function.init(
+                        allocator,
                         "_start",
                         exe_base_addr,
                         exe_base_addr + entry_offset,
@@ -233,6 +248,7 @@ pub fn getFunctions(
                         const func_end_addr = func_start_addr + plt_got_size;
 
                         try funcs.append(Function.init(
+                            allocator,
                             symbol.st_name_str,
                             exe_base_addr,
                             func_start_addr,

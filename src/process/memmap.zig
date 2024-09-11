@@ -4,6 +4,7 @@ const stdout = @import("../common.zig").stdout;
 const BaseAddrInfo = @import("./base_addr_info.zig").BaseAddrInfo;
 
 pub const MemorySegment = struct {
+    allocator: std.mem.Allocator,
     start_addr: usize,
     end_addr: usize,
     perms: []const u8,
@@ -15,6 +16,7 @@ pub const MemorySegment = struct {
     const Self = @This();
 
     pub fn init(
+        allocator: std.mem.Allocator,
         start_addr: usize,
         end_addr: usize,
         perms: []const u8,
@@ -24,6 +26,7 @@ pub const MemorySegment = struct {
         path: []const u8,
     ) !Self {
         return Self{
+            .allocator = allocator,
             .start_addr = start_addr,
             .end_addr = end_addr,
             .perms = perms,
@@ -33,10 +36,17 @@ pub const MemorySegment = struct {
             .path = path,
         };
     }
+
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.perms);
+        self.allocator.free(self.dev);
+        self.allocator.free(self.path);
+    }
 };
 
 pub const MemoryMap = struct {
-    segs: std.ArrayList(MemorySegment),
+    allocator: std.mem.Allocator,
+    segs: []MemorySegment,
     base_addr_info: BaseAddrInfo,
 
     const Self = @This();
@@ -48,6 +58,7 @@ pub const MemoryMap = struct {
             "/proc/{d}/maps",
             .{pid},
         );
+        defer allocator.free(maps_path);
 
         const file = try std.fs.openFileAbsolute(maps_path, .{});
         defer file.close();
@@ -57,6 +68,7 @@ pub const MemoryMap = struct {
         defer line.deinit();
 
         var memsegs = std.ArrayList(MemorySegment).init(allocator);
+        defer memsegs.deinit();
 
         while (true) {
             line.clearRetainingCapacity();
@@ -99,6 +111,7 @@ pub const MemoryMap = struct {
             const end_addr = try std.fmt.parseInt(usize, addrs_spl.next().?, 16);
 
             try memsegs.append(try MemorySegment.init(
+                allocator,
                 start_addr,
                 end_addr,
                 try perms.toOwnedSlice(),
@@ -156,9 +169,17 @@ pub const MemoryMap = struct {
         }
 
         return Self{
-            .segs = memsegs,
+            .allocator = allocator,
+            .segs = try memsegs.toOwnedSlice(),
             .base_addr_info = base_addr_info,
         };
+    }
+
+    pub fn deinit(self: *Self) void {
+        for (self.segs) |*seg| {
+            seg.deinit();
+        }
+        self.allocator.free(self.segs);
     }
 
     pub fn findMemSeg(
@@ -171,7 +192,7 @@ pub const MemoryMap = struct {
         var found_segs = std.ArrayList(MemorySegment).init(allocator);
         defer found_segs.deinit();
 
-        for (self.segs.items) |seg| {
+        for (self.segs) |seg| {
             if (perms) |p| {
                 if (std.mem.eql(u8, seg.perms, p) and std.mem.containsAtLeast(u8, seg.path, 1, path)) {
                     try found_segs.append(seg);

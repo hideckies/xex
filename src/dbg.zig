@@ -43,48 +43,39 @@ pub const Debugger = struct {
             option.file.args.?,
         );
         const breakpoints = std.ArrayList(Breakpoint).init(allocator);
+        const funcs = try func.getFunctions(
+            allocator,
+            process,
+            hdrs,
+            option.file.path,
+            option.file.buf,
+            breakpoints,
+        );
 
         return Debugger{
             .allocator = allocator,
             .option = option,
-            .machine = undefined,
+            .machine = try machine.Machine.init(allocator),
             .headers = hdrs,
-            .debug_info = undefined,
+            .debug_info = try DebugInfo.init(
+                allocator,
+                option.file.path,
+                option.file.buf,
+                option.file.type_,
+                funcs,
+            ),
             .running = false,
-            .process = undefined,
-            .funcs = undefined,
+            .process = process,
+            .funcs = funcs,
             .breakpoints = breakpoints,
         };
-
-        // const funcs = try func.getFunctions(
-        //     allocator,
-        //     process,
-        //     hdrs,
-        //     option.file.path,
-        //     option.file.buffer,
-        //     breakpoints,
-        // );
-        // return Debugger{
-        //     .allocator = allocator,
-        //     .option = option,
-        //     .machine = try machine.Machine.init(allocator),
-        //     .headers = hdrs,
-        //     .debug_info = try DebugInfo.init(
-        //         allocator,
-        //         option.file.path,
-        //         option.file.buffer,
-        //         option.file.type_,
-        //         funcs,
-        //     ),
-        //     .running = false,
-        //     .process = process,
-        //     .funcs = funcs,
-        //     .breakpoints = breakpoints,
-        // };
     }
 
     pub fn deinit(self: *Self) void {
         self.headers.deinit();
+        self.debug_info.deinit();
+        self.process.deinit();
+        self.allocator.free(self.funcs);
         self.breakpoints.deinit();
     }
 
