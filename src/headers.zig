@@ -3,7 +3,7 @@ const stdout = @import("./common.zig").stdout;
 const FileType = @import("./file.zig").FileType;
 
 pub const elf = @import("./headers/elf/elf.zig");
-pub const fmt = @import("./headers/fmt.zig");
+pub const MultiHeadersString = @import("./headers/fmt.zig").MultiHeadersString;
 pub const pe = @import("./headers/pe/pe.zig");
 
 pub const ELFProgramHeader32 = elf.elf32.ELFProgramHeader32;
@@ -22,8 +22,6 @@ pub const PEHeaders32 = pe.pe32.PEHeaders32;
 
 pub const PEHeaders64 = pe.pe64.PEHeaders64;
 
-const fmtMultiHeaders = fmt.fmtMultiHeaders;
-
 pub const Hdrs = union(enum) {
     ELFHeaders32: ELFHeaders32,
     ELFHeaders64: ELFHeaders64,
@@ -32,6 +30,7 @@ pub const Hdrs = union(enum) {
 };
 
 pub const Headers = struct {
+    allocator: std.mem.Allocator,
     hdrs: Hdrs,
 
     const Self = @This();
@@ -47,6 +46,7 @@ pub const Headers = struct {
         // Analyze headers
         switch (file_type) {
             FileType.elf32 => return Self{
+                .allocator = allocator,
                 .hdrs = Hdrs{ .ELFHeaders32 = try elf.elf32.ELFHeaders32.analyze(
                     allocator,
                     file_path,
@@ -54,6 +54,7 @@ pub const Headers = struct {
                 ) },
             },
             FileType.elf64 => return Self{
+                .allocator = allocator,
                 .hdrs = Hdrs{ .ELFHeaders64 = try elf.elf64.ELFHeaders64.analyze(
                     allocator,
                     file_path,
@@ -61,6 +62,7 @@ pub const Headers = struct {
                 ) },
             },
             FileType.pe32 => return Self{
+                .allocator = allocator,
                 .hdrs = Hdrs{ .PEHeaders32 = try pe.pe32.PEHeaders32.analyze(
                     allocator,
                     file_path,
@@ -68,6 +70,7 @@ pub const Headers = struct {
                 ) },
             },
             FileType.pe64 => return Self{
+                .allocator = allocator,
                 .hdrs = Hdrs{ .PEHeaders64 = try pe.pe64.PEHeaders64.analyze(
                     allocator,
                     file_path,
@@ -75,6 +78,15 @@ pub const Headers = struct {
                 ) },
             },
             FileType.unknown => return error.UnknownFileType,
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        switch (self.hdrs) {
+            .ELFHeaders32 => self.hdrs.ELFHeaders32.deinit(),
+            .ELFHeaders64 => self.hdrs.ELFHeaders64.deinit(),
+            .PEHeaders32 => self.hdrs.PEHeaders32.deinit(),
+            .PEHeaders64 => self.hdrs.PEHeaders64.deinit(),
         }
     }
 
@@ -115,110 +127,168 @@ pub const Headers = struct {
     }
 
     pub fn printProgramHeaders(self: Self) !void {
-        const allocator = std.heap.page_allocator;
         const empty_message = "No program headers.";
 
         switch (self.hdrs) {
-            .ELFHeaders32 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELFProgramHeader32,
-                self.hdrs.ELFHeaders32.program_headers,
-                empty_message,
-                true,
-            )}),
-            .ELFHeaders64 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELFProgramHeader64,
-                self.hdrs.ELFHeaders64.program_headers,
-                empty_message,
-                true,
-            )}),
-            .PEHeaders32 => try stdout.print_error(allocator, "{s}\n", .{empty_message}),
-            .PEHeaders64 => try stdout.print_error(allocator, "{s}\n", .{empty_message}),
+            .ELFHeaders32 => {
+                var ms = try MultiHeadersString.init(
+                    self.allocator,
+                    ELFProgramHeader32,
+                    self.hdrs.ELFHeaders32.program_headers,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .ELFHeaders64 => {
+                var ms = try MultiHeadersString.init(
+                    self.allocator,
+                    ELFProgramHeader64,
+                    self.hdrs.ELFHeaders64.program_headers,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .PEHeaders32 => try stdout.printError("{s}\n", .{empty_message}),
+            .PEHeaders64 => try stdout.printError("{s}\n", .{empty_message}),
         }
     }
 
     pub fn printSectionHeaders(self: Self) !void {
-        const allocator = std.heap.page_allocator;
         const empty_message = "No section headers.";
 
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
         switch (self.hdrs) {
-            .ELFHeaders32 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELFSectionHeader32,
-                self.hdrs.ELFHeaders32.section_headers,
-                empty_message,
-                true,
-            )}),
-            .ELFHeaders64 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELFSectionHeader64,
-                self.hdrs.ELFHeaders64.section_headers,
-                empty_message,
-                true,
-            )}),
-            .PEHeaders32 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                IMAGE_SECTION_HEADER,
-                self.hdrs.PEHeaders32.image_section_headers,
-                empty_message,
-                true,
-            )}),
-            .PEHeaders64 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                IMAGE_SECTION_HEADER,
-                self.hdrs.PEHeaders64.image_section_headers,
-                empty_message,
-                true,
-            )}),
+            .ELFHeaders32 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    ELFSectionHeader32,
+                    self.hdrs.ELFHeaders32.section_headers,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .ELFHeaders64 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    ELFSectionHeader64,
+                    self.hdrs.ELFHeaders64.section_headers,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .PEHeaders32 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    IMAGE_SECTION_HEADER,
+                    self.hdrs.PEHeaders32.image_section_headers,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .PEHeaders64 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    IMAGE_SECTION_HEADER,
+                    self.hdrs.PEHeaders64.image_section_headers,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
         }
     }
 
     pub fn printSymbols(self: Self) !void {
-        const allocator = std.heap.page_allocator;
         const empty_message = "No symbols.";
 
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
         switch (self.hdrs) {
-            .ELFHeaders32 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELF32_Sym,
-                self.hdrs.ELFHeaders32.symbols,
-                empty_message,
-                true,
-            )}),
-            .ELFHeaders64 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELF64_Sym,
-                self.hdrs.ELFHeaders64.symbols,
-                empty_message,
-                true,
-            )}),
-            .PEHeaders32 => try stdout.print_error(allocator, "Not implemented yet.\n", .{}),
-            .PEHeaders64 => try stdout.print_error(allocator, "Not implemented yet.\n", .{}),
+            .ELFHeaders32 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    ELF32_Sym,
+                    self.hdrs.ELFHeaders32.symbols,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .ELFHeaders64 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    ELF64_Sym,
+                    self.hdrs.ELFHeaders64.symbols,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .PEHeaders32 => try stdout.printError("Not implemented yet.\n", .{}),
+            .PEHeaders64 => try stdout.printError("Not implemented yet.\n", .{}),
         }
     }
 
     pub fn printDynSymbols(self: Self) !void {
-        const allocator = std.heap.page_allocator;
         const empty_message = "No dynamic symbols.";
 
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
         switch (self.hdrs) {
-            .ELFHeaders32 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELF32_Sym,
-                self.hdrs.ELFHeaders32.dynsymbols,
-                empty_message,
-                true,
-            )}),
-            .ELFHeaders64 => try stdout.print("{s}", .{try fmtMultiHeaders(
-                allocator,
-                ELF64_Sym,
-                self.hdrs.ELFHeaders64.dynsymbols,
-                empty_message,
-                true,
-            )}),
-            .PEHeaders32 => try stdout.print_error(allocator, "Not implemented yet.\n", .{}),
-            .PEHeaders64 => try stdout.print_error(allocator, "Not implemented yet.\n", .{}),
+            .ELFHeaders32 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    ELF32_Sym,
+                    self.hdrs.ELFHeaders32.dynsymbols,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .ELFHeaders64 => {
+                var ms = try MultiHeadersString.init(
+                    arena_allocator,
+                    ELF64_Sym,
+                    self.hdrs.ELFHeaders64.dynsymbols,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .PEHeaders32 => try stdout.printError("Not implemented yet.\n", .{}),
+            .PEHeaders64 => try stdout.printError("Not implemented yet.\n", .{}),
         }
     }
 };

@@ -4,8 +4,12 @@ const stdout = @import("../../common.zig").stdout;
 const util = @import("../../common.zig").util;
 const decode = @import("./decode.zig");
 
+const MultiHeadersString = @import("../fmt.zig").MultiHeadersString;
+
 // Reference: https://www.vergiliusproject.com/kernels/x64/windows-11/23h2/_IMAGE_DOS_HEADER
 pub const IMAGE_DOS_HEADER = struct {
+    allocator: std.mem.Allocator,
+
     e_magic: u16,
     e_cblp: u16,
     e_cp: u16,
@@ -34,8 +38,11 @@ pub const IMAGE_DOS_HEADER = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const str =
@@ -109,6 +116,8 @@ pub const IMAGE_DOS_HEADER = struct {
 
 // Reference: https://www.vergiliusproject.com/kernels/x64/windows-11/23h2/_IMAGE_FILE_HEADER
 pub const IMAGE_FILE_HEADER = struct {
+    allocator: std.mem.Allocator,
+
     Machine: u16,
     NumberOfSections: u16,
     TimeDateStamp: u32,
@@ -125,14 +134,14 @@ pub const IMAGE_FILE_HEADER = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
-        const allocator = arena.allocator();
+        const arena_allocator = arena.allocator();
 
-        const date_str = try util.timestapmToDateStr(allocator, @intCast(self.TimeDateStamp));
-        defer allocator.free(date_str);
+        const date_str = try util.timestampToDateStr(self.allocator, @intCast(self.TimeDateStamp));
+        defer self.allocator.free(date_str);
 
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const str =
@@ -158,6 +167,8 @@ pub const IMAGE_FILE_HEADER = struct {
 
 // Reference: https://www.vergiliusproject.com/kernels/x64/windows-11/23h2/_IMAGE_DATA_DIRECTORY
 pub const IMAGE_DATA_DIRECTORY = struct {
+    allocator: std.mem.Allocator,
+
     VirtualAddress: u32,
     Size: u32,
 
@@ -169,8 +180,11 @@ pub const IMAGE_DATA_DIRECTORY = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const str =
@@ -185,6 +199,8 @@ pub const IMAGE_DATA_DIRECTORY = struct {
 
 // Reference: https://www.vergiliusproject.com/kernels/x64/windows-11/23h2/_IMAGE_SECTION_HEADER
 pub const IMAGE_SECTION_HEADER = struct {
+    allocator: std.mem.Allocator,
+
     Name: [8]u8,
     VirtualSize: u32,
     VirtualAddress: u32,
@@ -204,8 +220,11 @@ pub const IMAGE_SECTION_HEADER = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const str =
@@ -323,6 +342,8 @@ pub const IMAGE_IMPORT_DESCRIPTOR = struct {
 };
 
 pub const FUNCS = struct {
+    allocator: std.mem.Allocator,
+
     DllName: []const u8,
     Functions: [][]const u8,
 
@@ -334,24 +355,23 @@ pub const FUNCS = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        // Format Functions
-        var str_funcs = std.ArrayList([]const u8).init(allocator);
-        defer str_funcs.deinit();
-        for (self.Functions) |func| {
-            const str_func = try std.fmt.allocPrint(allocator, "    - {s}", .{
-                try cham.green().fmt("{s}", .{func}),
-            });
-            try str_funcs.append(str_func);
-        }
-        const str_funcs_join = try std.mem.join(
-            allocator,
-            "\n",
-            try allocator.dupe([]const u8, str_funcs.items),
+        var ms_funcs = try MultiHeadersString.init(
+            self.allocator,
+            []const u8,
+            self.Functions,
+            "Functions not found",
+            false,
+            6,
         );
+        defer ms_funcs.deinit();
+        const str_funcs = ms_funcs.str_joined;
 
         const str =
             \\{s}:
@@ -359,7 +379,7 @@ pub const FUNCS = struct {
         ;
         return writer.print(str, .{
             try cham.yellow().fmt("{s}", .{self.DllName}),
-            str_funcs_join,
+            str_funcs,
         });
     }
 };

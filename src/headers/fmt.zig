@@ -1,41 +1,63 @@
 const std = @import("std");
 const chameleon = @import("chameleon");
 
-pub fn fmtMultiHeaders(
+pub const MultiHeadersString = struct {
     allocator: std.mem.Allocator,
-    comptime T: type,
-    headers: []T,
-    empty_message: []const u8,
-    is_index: bool,
-) ![]const u8 {
-    var cham = chameleon.initRuntime(.{ .allocator = allocator });
-    defer cham.deinit();
+    str: std.ArrayList([]const u8),
+    str_joined: []const u8,
 
-    // Format Section Headers
-    var str_hdrs = std.ArrayList([]const u8).init(allocator);
-    defer str_hdrs.deinit();
-    for (headers, 0..) |hdr, i| {
-        const str_hdr = if (is_index) try std.fmt.allocPrint(
-            allocator,
-            "[{s}] {s}\n",
-            .{
-                try cham.green().fmt("{d}", .{i}),
-                hdr,
-            },
-        ) else try std.fmt.allocPrint(
-            allocator,
-            "{s}\n",
-            .{hdr},
-        );
-        try str_hdrs.append(str_hdr);
-    }
-    if (headers.len == 0) {
-        try str_hdrs.append(try cham.red().fmt("{s}\n", .{empty_message}));
+    const Self = @This();
+
+    pub fn init(
+        allocator: std.mem.Allocator,
+        comptime T: type,
+        headers: []T,
+        comptime empty_message: []const u8,
+        comptime is_index: bool,
+        comptime indent: usize,
+    ) !Self {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
+        defer cham.deinit();
+
+        var str_hdrs = std.ArrayList([]const u8).init(allocator);
+        if (headers.len > 0) {
+            for (headers, 0..) |hdr, i| {
+                const str_hdr = if (is_index) try std.fmt.allocPrint(
+                    allocator,
+                    "{s}[{s}] {s}\n",
+                    .{
+                        " " ** indent,
+                        try cham.green().fmt("{d}", .{i}),
+                        hdr,
+                    },
+                ) else try std.fmt.allocPrint(
+                    allocator,
+                    "{s}{s}\n",
+                    .{ " " ** indent, hdr },
+                );
+                defer allocator.free(str_hdr);
+                try str_hdrs.append(try allocator.dupe(u8, str_hdr));
+            }
+        } else {
+            try str_hdrs.append(try allocator.dupe(u8, try cham.red().fmt("{s}\n", .{empty_message})));
+        }
+
+        return Self{
+            .allocator = allocator,
+            .str = str_hdrs,
+            .str_joined = try std.mem.join(allocator, "", str_hdrs.items),
+        };
     }
 
-    return try std.mem.join(
-        allocator,
-        "",
-        try allocator.dupe([]const u8, str_hdrs.items),
-    );
-}
+    pub fn deinit(self: *Self) void {
+        for (self.str.items) |s| {
+            self.allocator.free(s);
+        }
+        self.str.deinit();
+        self.allocator.free(self.str_joined);
+    }
+};

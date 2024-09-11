@@ -481,9 +481,6 @@ pub const SHFlags = struct {
 
     // value: sh_flags in Section Header
     pub fn parse(value: u64) !Self {
-        // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        // defer _ = gpa.deinit();
-        // const allocator = gpa.allocator();
 
         // var buffer = std.ArrayList([]const u8).init(allocator);
         // defer buffer.deinit();

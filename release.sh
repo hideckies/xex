@@ -45,19 +45,9 @@ for dir in ./*/; do
 done
 cd ..
 
-
-# Push tag to remote repository
-echo "[i] Pushing the tag v$version to remote repository..."
-git add . && git commit -m "v$version" && git push origin tag $version
-if [ $? -ne 0 ]; then
-    echo "[x] Failed to push tag v$version to remote repository."
-    exit 1
-fi
-echo "[+] OK"
-
-# Also push to origin main
-echo "[i] Push to remote main branch..."
-git push origin main
+# Push to remote repository
+echo "[i] Pushing to remote repository..."
+git add . && git commit -m "v$version" && git push origin main --tags
 if [ $? -ne 0 ]; then
     echo "[x] Failed to push to remote repository."
     exit 1

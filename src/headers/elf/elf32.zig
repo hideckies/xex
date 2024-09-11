@@ -4,10 +4,12 @@ const stdout = @import("../../common.zig").stdout;
 const util = @import("../../common.zig").util;
 
 const decode = @import("./decode.zig");
-const fmt = @import("../fmt.zig");
+const MultiHeadersString = @import("../fmt.zig").MultiHeadersString;
 
 // Reference: https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.eheader.html
 pub const ELFHeader32 = struct {
+    allocator: std.mem.Allocator,
+
     e_ident: [16]u8,
     e_type: u16,
     e_machine: u16,
@@ -31,8 +33,11 @@ pub const ELFHeader32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const fmt_e_ident =
@@ -42,7 +47,7 @@ pub const ELFHeader32 = struct {
             \\  OS/ABI                              {s}
             \\  ABI Version                         {s}
         ;
-        const str_e_ident = try std.fmt.allocPrint(allocator, fmt_e_ident, .{
+        const str_e_ident = try std.fmt.allocPrint(arena_allocator, fmt_e_ident, .{
             try cham.greenBright().fmt(
                 "{x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2} {x:0>2}",
                 .{
@@ -72,6 +77,7 @@ pub const ELFHeader32 = struct {
             try cham.magentaBright().fmt("{s}", .{(try decode.ABI.parse(self.e_ident[7])).str}),
             try cham.greenBright().fmt("{d}", .{self.e_ident[8]}),
         });
+        defer arena_allocator.free(str_e_ident);
 
         const str =
             \\{s}
@@ -110,6 +116,8 @@ pub const ELFHeader32 = struct {
 
 // Reference: https://refspecs.linuxbase.org/elf/gabi4+/ch5.pheader.html
 pub const ELFProgramHeader32 = struct {
+    allocator: std.mem.Allocator,
+
     p_type: u32,
     p_offset: u32,
     p_vaddr: u32,
@@ -127,8 +135,12 @@ pub const ELFProgramHeader32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
+        defer cham.deinit();
 
         const str =
             \\{s}:
@@ -152,6 +164,8 @@ pub const ELFProgramHeader32 = struct {
 
 // Reference: https://refspecs.linuxbase.org/elf/gabi4+/ch4.sheader.html
 pub const ELFSectionHeader32 = struct {
+    allocator: std.mem.Allocator,
+
     sh_name: u32,
     sh_type: u32,
     sh_flags: u32,
@@ -173,8 +187,11 @@ pub const ELFSectionHeader32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const str =
@@ -203,6 +220,8 @@ pub const ELFSectionHeader32 = struct {
 
 // Reference: https://docs.oracle.com/cd/E19620-01/805-5821/chapter6-79797/index.html
 pub const ELF32_Sym = struct {
+    allocator: std.mem.Allocator,
+
     st_name: u32,
     st_value: u32,
     st_size: u32,
@@ -220,8 +239,11 @@ pub const ELF32_Sym = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const str =
@@ -258,37 +280,49 @@ pub const ELFHeaders32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const str_phs = try fmt.fmtMultiHeaders(
+        var ms_phs = try MultiHeadersString.init(
             self.allocator,
             ELFProgramHeader32,
             self.program_headers,
             "No program headers",
             true,
+            0,
         );
+        defer ms_phs.deinit();
+        const str_phs = ms_phs.str_joined;
 
-        const str_shs = try fmt.fmtMultiHeaders(
+        var ms_shs = try MultiHeadersString.init(
             self.allocator,
             ELFSectionHeader32,
             self.section_headers,
             "No section headers",
             true,
+            0,
         );
+        defer ms_shs.deinit();
+        const str_shs = ms_shs.str_joined;
 
-        const str_symbols = try fmt.fmtMultiHeaders(
+        var ms_symbols = try MultiHeadersString.init(
             self.allocator,
             ELF32_Sym,
             self.symbols,
             "No symbols",
             true,
+            0,
         );
+        defer ms_symbols.deinit();
+        const str_symbols = ms_symbols.str_joined;
 
-        const str_dynsymbols = try fmt.fmtMultiHeaders(
+        var ms_dynsymbols = try MultiHeadersString.init(
             self.allocator,
             ELF32_Sym,
             self.dynsymbols,
             "No dynamic symbols",
             true,
+            0,
         );
+        defer ms_dynsymbols.deinit();
+        const str_dynsymbols = ms_dynsymbols.str_joined;
 
         const str =
             \\ELF Header
@@ -326,7 +360,11 @@ pub const ELFHeaders32 = struct {
     }
 
     pub fn printInfo(self: Self) !void {
-        var cham = chameleon.initRuntime(.{ .allocator = self.allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         var str_exec_or_shared: []const u8 = undefined;
@@ -357,6 +395,7 @@ pub const ELFHeaders32 = struct {
             "Start Address",
             try cham.greenBright().fmt("0x{x:0>8}", .{self.file_header.e_entry}),
         });
+        defer arena_allocator.free(str);
         try stdout.print("{s}\n", .{str});
     }
 
@@ -382,6 +421,7 @@ pub const ELFHeaders32 = struct {
         const endian = (try decode.Endian.parse(e_ident[5])).endian;
 
         const elf_header32 = ELFHeader32{
+            .allocator = allocator,
             .e_ident = e_ident,
             .e_type = try reader.readInt(u16, endian),
             .e_machine = try reader.readInt(u16, endian),
@@ -405,6 +445,7 @@ pub const ELFHeaders32 = struct {
         defer program_headers.deinit();
         for (0..elf_header32.e_phnum) |_| {
             const ph = ELFProgramHeader32{
+                .allocator = allocator,
                 .p_type = try reader.readInt(u32, endian),
                 .p_offset = try reader.readInt(u32, endian),
                 .p_vaddr = try reader.readInt(u32, endian),
@@ -423,6 +464,7 @@ pub const ELFHeaders32 = struct {
         defer section_headers.deinit();
         for (0..elf_header32.e_shnum) |_| {
             const sh = ELFSectionHeader32{
+                .allocator = allocator,
                 .sh_name = try reader.readInt(u32, endian),
                 .sh_type = try reader.readInt(u32, endian),
                 .sh_flags = try reader.readInt(u32, endian),
@@ -461,8 +503,8 @@ pub const ELFHeaders32 = struct {
                     sh.sh_name_str = "<none>";
                     continue;
                 }
-                const section_name = section_name_slice[0 .. end_idx + 1]; // add null-terminated character.
-                sh.sh_name_str = section_name;
+                const section_name = section_name_slice[0..end_idx];
+                sh.sh_name_str = try allocator.dupe(u8, section_name); //section_name;
             }
         }
 
@@ -489,6 +531,11 @@ pub const ELFHeaders32 = struct {
         }
         // Get strtab from strtab_hdr
         var strtab: ?[]u8 = null;
+        defer {
+            if (strtab) |st| {
+                allocator.free(st);
+            }
+        }
         if (strtab_hdr) |sh| {
             try reader.context.seekTo(sh.sh_offset);
             const strtab_tmp: []u8 = try allocator.alloc(u8, sh.sh_size);
@@ -499,6 +546,11 @@ pub const ELFHeaders32 = struct {
         }
         // Get dynstr from dynstr_hdr
         var dynstr: ?[]u8 = null;
+        defer {
+            if (dynstr) |ds| {
+                allocator.free(ds);
+            }
+        }
         if (dynstr_hdr) |sh| {
             try reader.context.seekTo(sh.sh_offset);
             const dynstr_tmp: []u8 = try allocator.alloc(u8, sh.sh_size);
@@ -511,15 +563,16 @@ pub const ELFHeaders32 = struct {
         const real_sym_size: usize = @sizeOf(u8) * 2 + @sizeOf(u16) + @sizeOf(u32) * 3;
         var symbols = std.ArrayList(ELF32_Sym).init(allocator);
         defer symbols.deinit();
-        if (symtab_hdr != null) {
+        if (symtab_hdr) |sth| {
             // Seek to the symbol table.
-            try reader.context.seekTo(symtab_hdr.?.sh_offset);
+            try reader.context.seekTo(sth.sh_offset);
 
             // Load symbols
-            const num_symbols = symtab_hdr.?.sh_size / real_sym_size;
+            const num_symbols = sth.sh_size / real_sym_size;
             for (num_symbols) |_| {
                 const st_name = try reader.readInt(u32, endian);
                 var sym = ELF32_Sym{
+                    .allocator = allocator,
                     .st_name = st_name,
                     .st_value = try reader.readInt(u32, endian),
                     .st_size = try reader.readInt(u32, endian),
@@ -529,12 +582,12 @@ pub const ELFHeaders32 = struct {
                     .st_name_str = undefined,
                 };
                 // Get symbol name strings
-                if (strtab != null) {
+                if (strtab) |st| {
                     if (sym.st_name != 0) {
-                        const symbol_name_slice = strtab.?[sym.st_name..];
+                        const symbol_name_slice = st[sym.st_name..];
                         const end_idx = std.mem.indexOfScalar(u8, symbol_name_slice, 0) orelse strtab_hdr.?.sh_size;
                         const symbol_name = symbol_name_slice[0..end_idx];
-                        sym.st_name_str = symbol_name;
+                        sym.st_name_str = try allocator.dupe(u8, symbol_name);
                     } else {
                         sym.st_name_str = "<none>";
                     }
@@ -548,14 +601,15 @@ pub const ELFHeaders32 = struct {
         // Get dynamic symbols
         var dynsymbols = std.ArrayList(ELF32_Sym).init(allocator);
         defer dynsymbols.deinit();
-        if (dynsym_hdr != null) {
+        if (dynsym_hdr) |dsh| {
             // Seek to the dynamic symbol table.
-            try reader.context.seekTo(dynsym_hdr.?.sh_offset);
+            try reader.context.seekTo(dsh.sh_offset);
 
             const num_symbols = dynsym_hdr.?.sh_size / real_sym_size;
             for (num_symbols) |_| {
                 const st_name = try reader.readInt(u32, endian);
                 var sym = ELF32_Sym{
+                    .allocator = allocator,
                     .st_name = st_name,
                     .st_value = try reader.readInt(u32, endian),
                     .st_size = try reader.readInt(u32, endian),
@@ -565,12 +619,12 @@ pub const ELFHeaders32 = struct {
                     .st_name_str = undefined,
                 };
                 // Get symbol name strings
-                if (dynstr != null) {
+                if (dynstr) |ds| {
                     if (sym.st_name != 0) {
-                        const symbol_name_slice = dynstr.?[sym.st_name..];
+                        const symbol_name_slice = ds[sym.st_name..];
                         const end_idx = std.mem.indexOfScalar(u8, symbol_name_slice, 0) orelse dynstr_hdr.?.sh_size;
                         const symbol_name = symbol_name_slice[0..end_idx];
-                        sym.st_name_str = symbol_name;
+                        sym.st_name_str = try allocator.dupe(u8, symbol_name);
                     } else {
                         sym.st_name_str = "<none>";
                     }
@@ -583,12 +637,32 @@ pub const ELFHeaders32 = struct {
 
         return Self{
             .allocator = allocator,
-            .file_path = file_path,
+            .file_path = try allocator.dupe(u8, file_path),
             .file_header = elf_header32,
             .program_headers = try program_headers.toOwnedSlice(),
             .section_headers = try section_headers.toOwnedSlice(),
             .symbols = try symbols.toOwnedSlice(),
             .dynsymbols = try dynsymbols.toOwnedSlice(),
         };
+    }
+
+    pub fn deinit(self: Self) void {
+        self.allocator.free(self.file_path);
+        self.allocator.free(self.program_headers);
+
+        for (self.section_headers) |sh| {
+            self.allocator.free(sh.sh_name_str);
+        }
+        self.allocator.free(self.section_headers);
+
+        for (self.symbols) |s| {
+            self.allocator.free(s.st_name_str);
+        }
+        self.allocator.free(self.symbols);
+
+        for (self.dynsymbols) |ds| {
+            self.allocator.free(ds.st_name_str);
+        }
+        self.allocator.free(self.dynsymbols);
     }
 };

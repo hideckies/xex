@@ -15,17 +15,19 @@ pub fn readCstring(allocator: std.mem.Allocator, reader: anytype, offset: usize)
 
     try reader.context.seekTo(0); // Reset poistion temporarily.
     var file_buf = try reader.context.readToEndAlloc(allocator, try reader.context.getEndPos());
+    defer allocator.free(file_buf);
     try reader.context.seekTo(current_pos); // Restore the current position.
 
     var length: usize = 0;
     while (file_buf[offset + length] != 0) {
         length += 1;
     }
-    return file_buf[offset .. offset + length];
+    return allocator.dupe(u8, file_buf[offset .. offset + length]);
 }
 
 pub fn usizeToBytes(allocator: std.mem.Allocator, value: usize) ![]u8 {
     const value_hex = try std.fmt.allocPrint(allocator, "{x:0>16}", .{value});
+    defer allocator.free(value_hex);
 
     var result = std.ArrayList(u8).init(allocator);
     defer result.deinit();
@@ -48,7 +50,7 @@ pub fn usizeToBytes(allocator: std.mem.Allocator, value: usize) ![]u8 {
     return result.toOwnedSlice();
 }
 
-pub fn timestapmToDateStr(allocator: std.mem.Allocator, timestamp: u64) ![]const u8 {
+pub fn timestampToDateStr(allocator: std.mem.Allocator, timestamp: u64) ![]const u8 {
     const epoch = std.time.epoch.EpochSeconds{ .secs = timestamp };
     const epoch_day = epoch.getEpochDay();
     const year_day = epoch_day.calculateYearDay();

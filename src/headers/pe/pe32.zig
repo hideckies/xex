@@ -1,6 +1,7 @@
 const std = @import("std");
 const chameleon = @import("chameleon");
 const stdout = @import("../../common.zig").stdout;
+const util = @import("../../common.zig").util;
 
 const common = @import("./common.zig");
 const IMAGE_DOS_HEADER = common.IMAGE_DOS_HEADER;
@@ -12,11 +13,12 @@ const IMAGE_IMPORT_DESCRIPTOR = common.IMAGE_IMPORT_DESCRIPTOR;
 const FUNCS = common.FUNCS;
 
 const decode = @import("./decode.zig");
-const fmt = @import("../fmt.zig");
-const util = @import("../../common.zig").util;
+const MultiHeadersString = @import("../fmt.zig").MultiHeadersString;
 
 // Reference: https://www.vergiliusproject.com/kernels/x86/windows-10/22h2/_IMAGE_OPTIONAL_HEADER
 pub const IMAGE_OPTIONAL_HEADER32 = struct {
+    allocator: std.mem.Allocator,
+
     Magic: u16,
     MajorLinkerVersion: u8,
     MinorLinkerVersion: u8,
@@ -56,17 +58,23 @@ pub const IMAGE_OPTIONAL_HEADER32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        const str_data_dir = try fmt.fmtMultiHeaders(
-            allocator,
+        var ms_data_dir = try MultiHeadersString.init(
+            self.allocator,
             IMAGE_DATA_DIRECTORY,
             @constCast(&self.DataDirectory),
-            "DataDirectory is empty.",
-            false,
+            "DataDirectory is empty",
+            true,
+            0,
         );
+        defer ms_data_dir.deinit();
+        const str_data_dir = ms_data_dir.str_joined;
 
         const str =
             \\  Magic                         {s}
@@ -138,6 +146,8 @@ pub const IMAGE_OPTIONAL_HEADER32 = struct {
 
 // Reference: https://www.vergiliusproject.com/kernels/x86/windows-10/22h2/_IMAGE_NT_HEADERS
 pub const IMAGE_NT_HEADERS32 = struct {
+    allocator: std.mem.Allocator,
+
     Signature: u32,
     FileHeader: IMAGE_FILE_HEADER,
     OptionalHeader: IMAGE_OPTIONAL_HEADER32,
@@ -150,8 +160,11 @@ pub const IMAGE_NT_HEADERS32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         const str =
@@ -177,6 +190,7 @@ pub const IMAGE_NT_HEADERS32 = struct {
 
 pub const PEHeaders32 = struct {
     allocator: std.mem.Allocator,
+
     file_path: []const u8,
     image_dos_header: IMAGE_DOS_HEADER,
     image_nt_headers: IMAGE_NT_HEADERS32,
@@ -194,44 +208,38 @@ pub const PEHeaders32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        // Format Section Headers
-        var str_shs = std.ArrayList([]const u8).init(self.allocator);
-        defer str_shs.deinit();
-        for (self.image_section_headers, 0..) |sh, i| {
-            const str_sh = try std.fmt.allocPrint(self.allocator, "  [{d}]\n{s}\n", .{ i, sh });
-            try str_shs.append(str_sh);
-        }
-        const str_shs_join = try std.mem.join(
+        var ms_shs = try MultiHeadersString.init(
             self.allocator,
-            "\n",
-            try self.allocator.dupe([]const u8, str_shs.items),
+            IMAGE_SECTION_HEADER,
+            self.image_section_headers,
+            "No image section headers",
+            true,
+            0,
         );
+        defer ms_shs.deinit();
+        const str_shs = ms_shs.str_joined;
 
-        // Format Exported Funcs
-        var str_exported_funcs = std.ArrayList([]const u8).init(self.allocator);
-        defer str_exported_funcs.deinit();
-        for (self.exported_funcs, 0..) |exported_func, i| {
-            const str_exported_func = try std.fmt.allocPrint(self.allocator, "  [{d}]\n{s}\n", .{ i, exported_func });
-            try str_exported_funcs.append(str_exported_func);
-        }
-        const str_exported_funcs_join = try std.mem.join(
+        var ms_exported_funcs = try MultiHeadersString.init(
             self.allocator,
-            "\n",
-            try self.allocator.dupe([]const u8, str_exported_funcs.items),
+            FUNCS,
+            self.exported_funcs,
+            "No exported functions",
+            true,
+            0,
         );
+        defer ms_exported_funcs.deinit();
+        const str_exported_funcs = ms_exported_funcs.str_joined;
 
-        // Format Imported Funcs
-        var str_imported_funcs = std.ArrayList([]const u8).init(self.allocator);
-        defer str_imported_funcs.deinit();
-        for (self.imported_funcs, 0..) |imported_func, i| {
-            const str_imported_func = try std.fmt.allocPrint(self.allocator, "  [{d}]\n{s}\n", .{ i, imported_func });
-            try str_imported_funcs.append(str_imported_func);
-        }
-        const str_imported_funcs_join = try std.mem.join(
+        var ms_imported_funcs = try MultiHeadersString.init(
             self.allocator,
-            "\n",
-            try self.allocator.dupe([]const u8, str_imported_funcs.items),
+            FUNCS,
+            self.imported_funcs,
+            "No imported functions",
+            true,
+            0,
         );
+        defer ms_imported_funcs.deinit();
+        const str_imported_funcs = ms_imported_funcs.str_joined;
 
         const str =
             \\DOS Header
@@ -267,15 +275,19 @@ pub const PEHeaders32 = struct {
         return writer.print(str, .{
             self.image_dos_header,
             self.image_nt_headers,
-            str_shs_join,
+            str_shs,
             self.image_export_directory,
-            str_exported_funcs_join,
-            str_imported_funcs_join,
+            str_exported_funcs,
+            str_imported_funcs,
         });
     }
 
     pub fn printInfo(self: Self) !void {
-        var cham = chameleon.initRuntime(.{ .allocator = self.allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         var image_type: []const u8 = undefined;
@@ -290,7 +302,7 @@ pub const PEHeaders32 = struct {
             image_type = "Unknown";
         }
 
-        const str = try std.fmt.allocPrint(self.allocator,
+        const str = try std.fmt.allocPrint(arena_allocator,
             \\{s: <14}: {s}
             \\{s: <14}: {s}
             \\{s: <14}: {s}
@@ -306,11 +318,13 @@ pub const PEHeaders32 = struct {
             "Start Address",
             try cham.greenBright().fmt("0x{x}", .{self.image_nt_headers.OptionalHeader.AddressOfEntryPoint}),
         });
+        defer arena_allocator.free(str);
         try stdout.print("{s}\n", .{str});
     }
 
     pub fn analyze(allocator: std.mem.Allocator, file_path: []const u8, reader: anytype) !Self {
         const image_dos_header = IMAGE_DOS_HEADER{
+            .allocator = allocator,
             .e_magic = try reader.readInt(u16, .little),
             .e_cblp = try reader.readInt(u16, .little),
             .e_cp = try reader.readInt(u16, .little),
@@ -352,8 +366,10 @@ pub const PEHeaders32 = struct {
         try reader.context.seekTo(nt_headers_offset);
 
         const image_nt_headers = IMAGE_NT_HEADERS32{
+            .allocator = allocator,
             .Signature = try reader.readInt(u32, .little),
             .FileHeader = IMAGE_FILE_HEADER{
+                .allocator = allocator,
                 .Machine = try reader.readInt(u16, .little),
                 .NumberOfSections = try reader.readInt(u16, .little),
                 .TimeDateStamp = try reader.readInt(u32, .little),
@@ -363,6 +379,7 @@ pub const PEHeaders32 = struct {
                 .Characteristics = try reader.readInt(u16, .little),
             },
             .OptionalHeader = IMAGE_OPTIONAL_HEADER32{
+                .allocator = allocator,
                 .Magic = try reader.readInt(u16, .little),
                 .MajorLinkerVersion = try reader.readInt(u8, .little),
                 .MinorLinkerVersion = try reader.readInt(u8, .little),
@@ -394,66 +411,82 @@ pub const PEHeaders32 = struct {
                 .NumberOfRvaAndSizes = try reader.readInt(u32, .little),
                 .DataDirectory = [16]IMAGE_DATA_DIRECTORY{
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
                     IMAGE_DATA_DIRECTORY{
+                        .allocator = allocator,
                         .VirtualAddress = try reader.readInt(u32, .little),
                         .Size = try reader.readInt(u32, .little),
                     },
@@ -466,6 +499,7 @@ pub const PEHeaders32 = struct {
         defer image_section_headers.deinit();
         for (0..image_nt_headers.FileHeader.NumberOfSections) |_| {
             const image_section_header = IMAGE_SECTION_HEADER{
+                .allocator = allocator,
                 .Name = [8]u8{
                     try reader.readInt(u8, .little),
                     try reader.readInt(u8, .little),
@@ -530,6 +564,7 @@ pub const PEHeaders32 = struct {
                 image_section_headers.items[0..image_nt_headers.FileHeader.NumberOfSections],
             );
             const dll_name = try util.readCstring(allocator, reader, dll_name_offset);
+            defer allocator.free(dll_name);
 
             const address_of_names_offset = common.rvaToOffset(
                 image_export_directory.AddressOfNames,
@@ -553,11 +588,13 @@ pub const PEHeaders32 = struct {
 
                 // Read CString
                 const func_name = try util.readCstring(allocator, reader, func_name_offset);
+                defer allocator.free(func_name);
                 try functions.append(func_name);
             }
 
             try exported_funcs.append(FUNCS{
-                .DllName = dll_name,
+                .allocator = allocator,
+                .DllName = try allocator.dupe(u8, dll_name),
                 .Functions = try allocator.dupe([]const u8, functions.items),
             });
         }
@@ -600,6 +637,7 @@ pub const PEHeaders32 = struct {
                 if (dll_name_offset >= try reader.context.getEndPos()) break;
                 // Read CString
                 const dll_name = try util.readCstring(allocator, reader, dll_name_offset);
+                defer allocator.free(dll_name);
 
                 // Get functions
                 var functions = std.ArrayList([]const u8).init(allocator);
@@ -623,13 +661,15 @@ pub const PEHeaders32 = struct {
 
                     // Read CString
                     const func_name = try util.readCstring(allocator, reader, func_name_offset);
-                    try functions.append(func_name);
+                    defer allocator.free(func_name);
+                    try functions.append(try allocator.dupe(u8, func_name));
 
                     thunk_offset += @sizeOf(u32);
                 }
 
                 try imported_funcs.append(FUNCS{
-                    .DllName = dll_name,
+                    .allocator = allocator,
+                    .DllName = try allocator.dupe(u8, dll_name),
                     .Functions = try allocator.dupe([]const u8, functions.items),
                 });
 
@@ -641,7 +681,7 @@ pub const PEHeaders32 = struct {
 
         return PEHeaders32{
             .allocator = allocator,
-            .file_path = file_path,
+            .file_path = try allocator.dupe(u8, file_path),
             .image_dos_header = image_dos_header,
             .image_nt_headers = image_nt_headers,
             .image_section_headers = try allocator.dupe(IMAGE_SECTION_HEADER, image_section_headers.items),
@@ -650,5 +690,32 @@ pub const PEHeaders32 = struct {
             .image_import_descriptors = try allocator.dupe(IMAGE_IMPORT_DESCRIPTOR, image_import_descriptors.items),
             .imported_funcs = try allocator.dupe(FUNCS, imported_funcs.items),
         };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.file_path);
+        self.allocator.free(self.image_section_headers);
+
+        for (self.exported_funcs) |ef| {
+            self.allocator.free(ef.DllName);
+
+            for (ef.Functions) |func_name| {
+                self.allocator.free(func_name);
+            }
+            self.allocator.free(ef.Functions);
+        }
+        self.allocator.free(self.exported_funcs);
+
+        self.allocator.free(self.image_import_descriptors);
+
+        for (self.imported_funcs) |if_| {
+            self.allocator.free(if_.DllName);
+
+            for (if_.Functions) |func_name| {
+                self.allocator.free(func_name);
+            }
+            self.allocator.free(if_.Functions);
+        }
+        self.allocator.free(self.imported_funcs);
     }
 };

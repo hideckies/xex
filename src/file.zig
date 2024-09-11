@@ -1,5 +1,6 @@
 const std = @import("std");
 const chameleon = @import("chameleon");
+const stdout = @import("./common.zig").stdout;
 const elf = @import("./headers.zig").elf;
 const pe = @import("./headers.zig").pe;
 
@@ -41,7 +42,8 @@ pub const FileType = enum {
                 // Check for PE32 or PE64
 
                 // Skip IMAGE_NT_HEADERS.FileHeader
-                try reader.skipBytes(@sizeOf(pe.common.IMAGE_FILE_HEADER), .{});
+                const image_file_header_size = @sizeOf(u16) * 4 + @sizeOf(u32) * 3; // See the IMAGE_FILE_HEADER struct
+                try reader.skipBytes(image_file_header_size, .{});
 
                 const optional_header_magic = try reader.readInt(u16, .little);
                 if (optional_header_magic == 0x010b) {
@@ -63,6 +65,7 @@ pub const FileType = enum {
 };
 
 pub const FileHash = struct {
+    allocator: std.mem.Allocator,
     md5: []u8,
     sha1: []u8,
     sha2_256: []u8,
@@ -80,8 +83,11 @@ pub const FileHash = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
         return writer.print(
@@ -115,10 +121,9 @@ pub const FileHash = struct {
         );
     }
 
-    pub fn init(file_buf: []const u8) !Self {
-        const allocator = std.heap.page_allocator;
-
+    pub fn init(allocator: std.mem.Allocator, file_buf: []const u8) !Self {
         var self = Self{
+            .allocator = allocator,
             .md5 = undefined,
             .sha1 = undefined,
             .sha2_256 = undefined,
@@ -136,6 +141,7 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 16 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.md5 = try allocator.dupe(u8, str);
         }
@@ -146,6 +152,7 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 20 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.sha1 = try allocator.dupe(u8, str);
         }
@@ -156,6 +163,7 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 32 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.sha2_256 = try allocator.dupe(u8, str);
         }
@@ -166,6 +174,7 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 48 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.sha2_384 = try allocator.dupe(u8, str);
         }
@@ -176,6 +185,7 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 64 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.sha2_512 = try allocator.dupe(u8, str);
         }
@@ -186,6 +196,7 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 32 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.sha3_256 = try allocator.dupe(u8, str);
         }
@@ -196,6 +207,7 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 48 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.sha3_384 = try allocator.dupe(u8, str);
         }
@@ -206,25 +218,37 @@ pub const FileHash = struct {
             h.update(file_buf);
             h.final(&hash_out);
             const buf = try allocator.alloc(u8, 64 * 2);
+            defer allocator.free(buf);
             const str = try std.fmt.bufPrint(buf, "{s}", .{std.fmt.fmtSliceHexLower(&hash_out)});
             self.sha3_512 = try allocator.dupe(u8, str);
         }
 
         return self;
     }
+
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.md5);
+        self.allocator.free(self.sha1);
+        self.allocator.free(self.sha2_256);
+        self.allocator.free(self.sha2_384);
+        self.allocator.free(self.sha2_512);
+        self.allocator.free(self.sha3_256);
+        self.allocator.free(self.sha3_384);
+        self.allocator.free(self.sha3_512);
+    }
 };
 
 pub const File = struct {
+    allocator: std.mem.Allocator,
     path: []const u8,
     args: ?[*:null]const ?[*:0]const u8, // it is used for passing arguments to execveZ
-    buffer: []const u8,
+    buf: []const u8,
     type_: FileType,
     hash: FileHash,
 
     const Self = @This();
 
-    pub fn init(path: []const u8, args: ?[*:null]const ?[*:0]const u8) !Self {
-        const allocator = std.heap.page_allocator;
+    pub fn init(allocator: std.mem.Allocator, path: []const u8, args: ?[*:null]const ?[*:0]const u8) !Self {
         // Get absolute path.
         const cwd_path = try std.fs.cwd().realpathAlloc(allocator, ".");
         defer allocator.free(cwd_path);
@@ -241,14 +265,23 @@ pub const File = struct {
         defer file.close();
         const reader = file.reader();
         const file_size = try file.getEndPos();
-        const file_buf = try file.readToEndAlloc(std.heap.page_allocator, file_size);
+        const file_buf = try file.readToEndAlloc(allocator, file_size);
+        defer allocator.free(file_buf);
 
         return Self{
+            .allocator = allocator,
             .path = try allocator.dupe(u8, path_abs),
             .args = args,
-            .buffer = file_buf,
+            .buf = try allocator.dupe(u8, file_buf),
             .type_ = try FileType.detect(reader),
-            .hash = try FileHash.init(file_buf),
+            .hash = try FileHash.init(allocator, file_buf),
         };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.path);
+        self.allocator.free(self.buf);
+
+        self.hash.deinit();
     }
 };
