@@ -80,16 +80,18 @@ pub const Debugger = struct {
     }
 
     pub fn run(self: *Self) !void {
-        var cham = chameleon.initRuntime(.{ .allocator = self.allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        try stdout.print_info(
-            self.allocator,
+        try stdout.printInfo(
             "Start debugging with child process ({s}).\n",
             .{try cham.cyanBright().fmt("{d}", .{self.process.pid})},
         );
-        try stdout.print_info(
-            self.allocator,
+        try stdout.printInfo(
             "Run '{s}' or '{s}' for the usage.\n",
             .{ try cham.cyanBright().fmt("?", .{}), try cham.cyanBright().fmt("help", .{}) },
         );
@@ -144,8 +146,7 @@ pub const Debugger = struct {
             }
         }
 
-        try stdout.print_info(
-            self.allocator,
+        try stdout.printInfo(
             "The process {s} exited.\n",
             .{try cham.cyanBright().fmt("{d}", .{self.process.pid})},
         );

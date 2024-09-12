@@ -64,59 +64,72 @@ pub const X86Registers = extern struct {
 
     const Self = @This();
 
-    pub fn format(
-        self: Self,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+    pub fn display(self: Self, allocator: std.mem.Allocator) !void {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        const str_generals = try std.fmt.allocPrint(allocator,
+        const str_generals = try std.fmt.allocPrint(arena_allocator,
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
+            \\{s} {s} {s} {s} {s} {s}
+            \\{s} {s} {s} {s}
         , .{
-            try cham.yellow().fmt("EAX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.eax}),
-            try cham.yellow().fmt("EBX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.ebx}),
-            try cham.yellow().fmt("ECX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.ecx}),
-            try cham.yellow().fmt("EDX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.edx}),
-            try cham.yellow().fmt("ESI", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.esi}),
-            try cham.yellow().fmt("EDI", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.edi}),
-            try cham.yellow().fmt("EBP", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.ebp}),
-            try cham.yellow().fmt("ESP", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.esp}),
-            try cham.yellow().fmt("EIP", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.eip}),
+            try cham.yellow().fmt("RAX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rax}),
+            try cham.yellow().fmt("RBX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rbx}),
+            try cham.yellow().fmt("RCX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rcx}),
+            try cham.yellow().fmt("RDX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rdx}),
+            try cham.yellow().fmt("R11", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r11}),
+            try cham.yellow().fmt("R12", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r12}),
+            try cham.yellow().fmt("R13", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r13}),
+            try cham.yellow().fmt("R14", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r14}),
+            try cham.yellow().fmt("R15", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r15}),
+            try cham.yellow().fmt("RSI", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rsi}),
+            try cham.yellow().fmt("RDI", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rdi}),
+            try cham.yellow().fmt("RBP", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rbp}),
+            try cham.yellow().fmt("RSP", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rsp}),
+            try cham.yellow().fmt("RIP", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rip}),
         });
+        defer arena_allocator.free(str_generals);
 
-        const str_segs = try std.fmt.allocPrint(allocator,
+        const str_segs = try std.fmt.allocPrint(arena_allocator,
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
         , .{
             try cham.yellow().fmt("CS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.xcs}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.cs}),
             try cham.yellow().fmt("DS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.xds}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.ds}),
             try cham.yellow().fmt("ES", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.xes}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.es}),
             try cham.yellow().fmt("FS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.xfs}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.fs}),
             try cham.yellow().fmt("GS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.xgs}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.gs}),
             try cham.yellow().fmt("SS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>8}", .{self.xss}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.ss}),
         });
+        defer arena_allocator.free(str_segs);
 
+        // Due to the max args size (32), devide with two parts.
         const str_eflags_keys = try cham.yellow().fmt("CF PF AF ZF SF TF IF DF OF IOPL NT RF VM AC VIF VIP ID", .{});
         const str_eflags_values = try cham.greenBright().fmt(
             " {d}  {d}  {d}  {d}  {d}  {d}  {d}  {d}  {d}    {d}  {d}  {d}  {d}  {d}   {d}   {d}  {d}",
@@ -140,24 +153,16 @@ pub const X86Registers = extern struct {
                 getFlag(self.eflags, EFLAGS_ID),
             },
         );
+        defer arena_allocator.free(str_eflags_keys);
+        defer arena_allocator.free(str_eflags_values);
 
-        try writer.print(
-            \\{s}
-            \\
-            \\{s}
-            \\
-            \\{s}
-            \\{s}
-        , .{
-            str_generals,
-            str_segs,
-            str_eflags_keys,
-            str_eflags_values,
-        });
+        try stdout.print("{s}\n\n", .{str_generals});
+        try stdout.print("{s}\n\n", .{str_segs});
+        try stdout.print("{s}\n\n", .{str_eflags_keys});
+        try stdout.print("{s}\n{s}\n", .{ str_eflags_keys, str_eflags_values });
     }
 
-    pub fn get(self: Self, reg: []const u8) !usize {
-        const allocator = std.heap.page_allocator;
+    pub fn get(self: Self, allocator: std.mem.Allocator, reg: []const u8) !usize {
         const buf = try allocator.alloc(u8, reg.len);
         defer allocator.free(buf);
         const reg_lower = std.ascii.lowerString(buf, reg);
@@ -231,8 +236,7 @@ pub const X86Registers = extern struct {
         }
     }
 
-    pub fn set(self: *Self, reg: []const u8, value: usize) !void {
-        const allocator = std.heap.page_allocator;
+    pub fn set(self: *Self, allocator: std.mem.Allocator, reg: []const u8, value: usize) !void {
         const buf = try allocator.alloc(u8, reg.len);
         defer allocator.free(buf);
         const reg_lower = std.ascii.lowerString(buf, reg);

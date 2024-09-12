@@ -56,7 +56,7 @@ pub const Instruction = struct {
         self: Self,
         pc: usize,
         breakpoints: std.ArrayList(Breakpoint),
-        funcs: []Function,
+        funcs: ?[]Function,
     ) !void {
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
@@ -66,9 +66,11 @@ pub const Instruction = struct {
         defer cham.deinit();
 
         // Display the function name if it is the start of the function.
-        for (funcs) |func| {
-            if (func.start_addr == self.addr) {
-                try stdout.print("\n{s}:\n", .{func.name});
+        if (funcs) |funcs_| {
+            for (funcs_) |func| {
+                if (func.start_addr == self.addr) {
+                    try stdout.print("\n{s}:\n", .{func.name});
+                }
             }
         }
 
@@ -85,9 +87,11 @@ pub const Instruction = struct {
         });
 
         // Add newline if the address is the end_addr.
-        for (funcs) |func| {
-            if (func.end_addr == self.addr) {
-                try stdout.print("\n", .{});
+        if (funcs) |funcs_| {
+            for (funcs_) |func| {
+                if (func.end_addr == self.addr) {
+                    try stdout.print("\n", .{});
+                }
             }
         }
     }
@@ -164,7 +168,7 @@ pub fn getInstructions(
     defer _ = c.cs_close(&handle);
     const err = c.cs_open(c.CS_ARCH_X86, c.CS_MODE_64, &handle);
     if (err != c.CS_ERR_OK) {
-        try stdout.print("err: {}\n", .{err});
+        try stdout.print("error: {}\n", .{err});
         return error.CapstoneInitError;
     }
 
@@ -196,7 +200,7 @@ pub fn getInstructions(
             var op_str_size: usize = 0;
             while (op_str[op_str_size] != 0) : (op_str_size += 1) {}
 
-            const new_inst = Instruction.init(
+            var new_inst = Instruction.init(
                 allocator,
                 addr,
                 size,
@@ -234,6 +238,9 @@ pub fn getInstructions(
                     addr,
                 );
                 try insts.append(orig_inst);
+
+                // Don't forget free the new_inst.
+                new_inst.deinit();
             } else {
                 try insts.append(new_inst);
             }

@@ -83,31 +83,6 @@ fn findTextSectionData(file_buf: []const u8, section_headers: []ELFSectionHeader
     return error.TextSectionNotFound;
 }
 
-// Helper function to find a function start offset.
-// fn findFuncStartOffsets(
-//     allocator: std.mem.Allocator,
-//     text_section_data: []const u8,
-// ) ![]usize {
-//     const func_start_pattern: []const u8 = &[_]u8{ 0x55, 0x48, 0x89, 0xe5 }; // push rbp; mov rbp, rsp
-
-//     var start_offsets = std.ArrayList(usize).init(allocator);
-//     defer start_offsets.deinit();
-
-//     for (text_section_data, 0..) |byte, i| {
-//         _ = byte;
-//         if (i + func_start_pattern.len <= text_section_data.len) {
-//             const slice = text_section_data[i .. i + func_start_pattern.len];
-//             if (std.mem.eql(u8, slice, func_start_pattern)) {
-//                 try start_offsets.append(i);
-//             }
-//         }
-//     }
-//     if (start_offsets.items.len > 0) {
-//         return start_offsets.toOwnedSlice();
-//     }
-//     return error.FunctionStartOffsetNotFound;
-// }
-
 pub fn getFunctions(
     allocator: std.mem.Allocator,
     process: Process,
@@ -161,10 +136,6 @@ pub fn getFunctions(
                 const memseg = try memmap.findMemSeg(null, file_name, 0);
                 const exe_base_addr = memseg.start_addr;
 
-                // Find functions from symbol table.
-                // var func_symbols_tmp = std.ArrayList(ELF64_Sym).init(allocator);
-                // defer func_symbols_tmp.deinit();
-
                 for (symbols) |symbol| {
                     if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
                         if (symbol.st_value == 0) continue;
@@ -205,12 +176,26 @@ pub fn getFunctions(
                 // Add '_start' function if it does not exist.
                 if (symbols.len == 0) {
                     const entry_offset = headers.hdrs.ELFHeaders64.file_header.e_entry;
+                    const func_start_addr = exe_base_addr + entry_offset;
+
+                    // Get the end address of the function.
+                    var disas = try Disas.init(
+                        allocator,
+                        process.pid,
+                        breakpoints,
+                        func_start_addr,
+                        300,
+                        null,
+                    );
+                    defer disas.deinit();
+                    const func_end_addr = try disas.findFuncEndAddr();
+
                     try funcs.append(Function.init(
                         allocator,
                         "_start",
                         exe_base_addr,
-                        exe_base_addr + entry_offset,
-                        exe_base_addr + entry_offset, // TODO
+                        func_start_addr,
+                        func_end_addr, // TODO: How to find the end address?
                     ));
                 }
 
@@ -245,7 +230,18 @@ pub fn getFunctions(
                             func_start_addr = exe_base_addr + symbol.st_value;
                         }
 
-                        const func_end_addr = func_start_addr + plt_got_size;
+                        // Get the end address of the function.
+                        // const func_end_addr = func_start_addr + plt_got_size;
+                        var disas = try Disas.init(
+                            allocator,
+                            process.pid,
+                            breakpoints,
+                            func_start_addr,
+                            300,
+                            null,
+                        );
+                        defer disas.deinit();
+                        const func_end_addr = try disas.findFuncEndAddr();
 
                         try funcs.append(Function.init(
                             allocator,

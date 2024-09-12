@@ -219,10 +219,14 @@ pub const Command = struct {
     }
 
     pub fn displayPrompt(self: Self) !void {
-        var cham = chameleon.initRuntime(.{ .allocator = self.allocator });
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        const pc = try ptrace.readRegister(self.pid, "pc");
+        const pc = try ptrace.readRegister(self.allocator, self.pid, "pc");
 
         // Clear line
         try stdout.print("\r\x1b[2K\r", .{});

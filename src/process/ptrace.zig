@@ -81,34 +81,34 @@ pub fn readRegisters(pid: posix.pid_t, regs_int: usize) !void {
     try posix.ptrace(PTRACE.GETREGS, pid, 0, regs_int);
 }
 
-pub fn readRegister(pid: posix.pid_t, reg_name: []const u8) !usize {
+pub fn readRegister(allocator: std.mem.Allocator, pid: posix.pid_t, reg_name: []const u8) !usize {
     switch (builtin.cpu.arch) {
         .x86 => {
             var regs: X86Registers = undefined;
             try posix.ptrace(PTRACE.GETREGS, pid, 0, @intFromPtr(&regs));
-            return regs.get(reg_name);
+            return regs.get(allocator, reg_name);
         },
         .x86_64 => {
             var regs: X8664Registers = undefined;
             try posix.ptrace(PTRACE.GETREGS, pid, 0, @intFromPtr(&regs));
-            return regs.get(reg_name);
+            return regs.get(allocator, reg_name);
         },
         else => return error.UnsupportedArchitecture,
     }
 }
 
-pub fn writeRegister(pid: posix.pid_t, reg_name: []const u8, value: usize) !void {
+pub fn writeRegister(allocator: std.mem.Allocator, pid: posix.pid_t, reg_name: []const u8, value: usize) !void {
     switch (builtin.cpu.arch) {
         .x86 => {
             var regs: X86Registers = undefined;
             try posix.ptrace(PTRACE.GETREGS, pid, 0, @intFromPtr(&regs));
-            try regs.set(reg_name, value);
+            try regs.set(allocator, reg_name, value);
             try posix.ptrace(PTRACE.SETREGS, pid, 0, @intFromPtr(&regs));
         },
         .x86_64 => {
             var regs: X8664Registers = undefined;
             try posix.ptrace(PTRACE.GETREGS, pid, 0, @intFromPtr(&regs));
-            try regs.set(reg_name, value);
+            try regs.set(allocator, reg_name, value);
             try posix.ptrace(PTRACE.SETREGS, pid, 0, @intFromPtr(&regs));
         },
         else => return error.UnsupportedArchitecture,
@@ -116,16 +116,16 @@ pub fn writeRegister(pid: posix.pid_t, reg_name: []const u8, value: usize) !void
 }
 
 // Step back (PC - 1).
-pub fn resetPC(pid: posix.pid_t) !usize {
-    const pc = try readRegister(pid, "pc") - 1;
-    try writeRegister(pid, "pc", pc);
+pub fn resetPC(allocator: std.mem.Allocator, pid: posix.pid_t) !usize {
+    const pc = try readRegister(allocator, pid, "pc") - 1;
+    try writeRegister(allocator, pid, "pc", pc);
     return pc;
 }
 
-pub fn continueExec(pid: posix.pid_t) !WaitStatus {
+pub fn continueExec(allocator: std.mem.Allocator, pid: posix.pid_t) !WaitStatus {
     try posix.ptrace(PTRACE.CONT, pid, 0, 0);
     const status = wait(pid);
-    _ = try resetPC(pid);
+    _ = try resetPC(allocator, pid);
     return status;
 }
 

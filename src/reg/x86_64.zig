@@ -74,17 +74,15 @@ pub const X8664Registers = extern struct {
 
     const Self = @This();
 
-    pub fn format(
-        self: Self,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        const allocator = std.heap.page_allocator;
-        var cham = chameleon.initRuntime(.{ .allocator = allocator });
+    pub fn display(self: Self, allocator: std.mem.Allocator) !void {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        const str_generals = try std.fmt.allocPrint(allocator,
+        const str_generals = try std.fmt.allocPrint(arena_allocator,
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
@@ -120,8 +118,9 @@ pub const X8664Registers = extern struct {
             try cham.yellow().fmt("RIP", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.rip}),
         });
+        defer arena_allocator.free(str_generals);
 
-        const str_segs = try std.fmt.allocPrint(allocator,
+        const str_segs = try std.fmt.allocPrint(arena_allocator,
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
         , .{
@@ -138,7 +137,9 @@ pub const X8664Registers = extern struct {
             try cham.yellow().fmt("SS", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.ss}),
         });
+        defer arena_allocator.free(str_segs);
 
+        // Due to the max args size (32), devide with two parts.
         const str_eflags_keys = try cham.yellow().fmt("CF PF AF ZF SF TF IF DF OF IOPL NT RF VM AC VIF VIP ID", .{});
         const str_eflags_values = try cham.greenBright().fmt(
             " {d}  {d}  {d}  {d}  {d}  {d}  {d}  {d}  {d}    {d}  {d}  {d}  {d}  {d}   {d}   {d}  {d}",
@@ -162,24 +163,15 @@ pub const X8664Registers = extern struct {
                 getFlag(self.eflags, EFLAGS_ID),
             },
         );
+        defer arena_allocator.free(str_eflags_keys);
+        defer arena_allocator.free(str_eflags_values);
 
-        return writer.print(
-            \\{s}
-            \\
-            \\{s}
-            \\
-            \\{s}
-            \\{s}
-        , .{
-            str_generals,
-            str_segs,
-            str_eflags_keys,
-            str_eflags_values,
-        });
+        try stdout.print("{s}\n\n", .{str_generals});
+        try stdout.print("{s}\n\n", .{str_segs});
+        try stdout.print("{s}\n{s}\n", .{ str_eflags_keys, str_eflags_values });
     }
 
-    pub fn get(self: Self, reg: []const u8) !usize {
-        const allocator = std.heap.page_allocator;
+    pub fn get(self: Self, allocator: std.mem.Allocator, reg: []const u8) !usize {
         const buf = try allocator.alloc(u8, reg.len);
         defer allocator.free(buf);
         const reg_lower = std.ascii.lowerString(buf, reg);
@@ -263,8 +255,7 @@ pub const X8664Registers = extern struct {
         }
     }
 
-    pub fn set(self: *Self, reg: []const u8, value: usize) !void {
-        const allocator = std.heap.page_allocator;
+    pub fn set(self: *Self, allocator: std.mem.Allocator, reg: []const u8, value: usize) !void {
         const buf = try allocator.alloc(u8, reg.len);
         defer allocator.free(buf);
         const reg_lower = std.ascii.lowerString(buf, reg);

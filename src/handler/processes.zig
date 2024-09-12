@@ -7,7 +7,11 @@ const Debugger = @import("../dbg.zig").Debugger;
 
 // Display the current PID of running target program.
 pub fn processes(dbg: *Debugger) !void {
-    var cham = chameleon.initRuntime(.{ .allocator = dbg.allocator });
+    var arena = std.heap.ArenaAllocator.init(dbg.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
     defer cham.deinit();
 
     return stdout.print(

@@ -8,43 +8,51 @@ const ptrace = @import("../process.zig").ptrace;
 const func = @import("../func.zig");
 
 pub fn restart(dbg: *Debugger, cmd: *Command) !void {
-    var cham = chameleon.initRuntime(.{ .allocator = dbg.allocator });
+    var arena = std.heap.ArenaAllocator.init(dbg.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
     defer cham.deinit();
 
-    try stdout.print_info(dbg.allocator, "Restarting the program...\n", .{});
+    try stdout.printInfo("Restarting the program...\n", .{});
 
     _ = std.os.linux.kill(dbg.process.pid, std.os.linux.SIG.KILL);
 
+    // New process
+    dbg.process.deinit();
     const new_process = try Process.init(
         dbg.allocator,
         dbg.option.file.path,
         dbg.option.file.args.?,
     );
     dbg.process = new_process;
+
     // Refetch functions.
+    dbg.allocator.free(dbg.funcs);
     dbg.funcs = try func.getFunctions(
         dbg.allocator,
         new_process,
         dbg.headers,
         dbg.option.file.path,
-        dbg.option.file.buffer,
+        dbg.option.file.buf,
         dbg.breakpoints,
     );
-
-    cmd.pid = new_process.pid;
 
     // Reset breakpoints
     dbg.breakpoints.clearRetainingCapacity();
 
-    try stdout.print_info(
-        dbg.allocator,
+    // Update the PID of the cmd.
+    cmd.pid = new_process.pid;
+
+    try stdout.printInfo(
         "The process started with PID {s}.\n",
         .{try cham.cyanBright().fmt("{d}", .{new_process.pid})},
     );
 }
 
 pub fn conti(dbg: *Debugger, cmd: *Command) !void {
-    const pc = try ptrace.readRegister(dbg.process.pid, "pc");
+    const pc = try ptrace.readRegister(dbg.allocator, dbg.process.pid, "pc");
     for (dbg.breakpoints.items) |*bp| {
         if (bp.addr == pc) {
             if (bp.is_set) {
@@ -56,7 +64,7 @@ pub fn conti(dbg: *Debugger, cmd: *Command) !void {
         }
     }
 
-    const status = try ptrace.continueExec(dbg.process.pid);
+    const status = try ptrace.continueExec(dbg.allocator, dbg.process.pid);
     switch (status) {
         .SignalTrap => return,
         .ProcessExited => try restart(dbg, cmd),
@@ -65,19 +73,17 @@ pub fn conti(dbg: *Debugger, cmd: *Command) !void {
 }
 
 pub fn stepi(dbg: *Debugger, cmd: *Command) !void {
-    const allocator = std.heap.page_allocator;
-
     // Step n times.
     var n: usize = 1;
     if (cmd.command_args.items.len == 1) {
         n = std.fmt.parseInt(usize, cmd.command_args.items[0], 10) catch |err| {
-            return stdout.print_error(allocator, "Invalid argument: {}\n", .{err});
+            return stdout.printError("Invalid argument: {}\n", .{err});
         };
     } else if (cmd.command_args.items.len > 1) {
-        return stdout.print_error(allocator, "Too many arguments.\n", .{});
+        return stdout.printError("Too many arguments.\n", .{});
     }
 
-    const pc = try ptrace.readRegister(dbg.process.pid, "pc");
+    const pc = try ptrace.readRegister(dbg.allocator, dbg.process.pid, "pc");
 
     while (n > 0) : (n -= 1) {
         var bp_reached: bool = false;
@@ -103,47 +109,48 @@ pub fn stepi(dbg: *Debugger, cmd: *Command) !void {
 }
 
 pub fn steps(dbg: *Debugger, cmd: *Command) !void {
-    const allocator = std.heap.page_allocator;
-
     // Step n times.
     var n: usize = 1;
     if (cmd.command_args.items.len == 1) {
         n = std.fmt.parseInt(usize, cmd.command_args.items[0], 10) catch |err| {
-            return stdout.print_error(allocator, "Invalid argument: {}\n", .{err});
+            return stdout.printError("Invalid argument: {}\n", .{err});
         };
     } else if (cmd.command_args.items.len > 1) {
-        return stdout.print_error(allocator, "Too many arguments.\n", .{});
+        return stdout.printError("Too many arguments.\n", .{});
     }
 
-    var dwarf = dbg.debug_info.elf.?.dwarf;
-
-    while (n > 0) : (n -= 1) {
-        var pc_offset = try dbg.process.memmap.base_addr_info.getOffset(
-            try ptrace.readRegister(dbg.process.pid, "pc"),
-        );
-        const compile_unit = dwarf.findCompileUnit(pc_offset) catch |err| {
-            return stdout.print_error(allocator, "Failed to step source: {}\n", .{err});
-        };
-        const line_info = dwarf.getLineNumberInfo(allocator, compile_unit, pc_offset) catch |err| {
-            return stdout.print_error(allocator, "Failed to step source: {}\n", .{err});
-        };
-
-        while (true) {
-            try stepi(dbg, cmd);
-
-            pc_offset = try dbg.process.memmap.base_addr_info.getOffset(
-                try ptrace.readRegister(dbg.process.pid, "pc"),
+    if (dbg.debug_info.elf) |elf| {
+        var dwarf = elf.dwarf;
+        while (n > 0) : (n -= 1) {
+            var pc_offset = try dbg.process.memmap.base_addr_info.getOffset(
+                try ptrace.readRegister(dbg.allocator, dbg.process.pid, "pc"),
             );
-            const new_line_info = dwarf.getLineNumberInfo(allocator, compile_unit, pc_offset) catch |err| {
-                return stdout.print_error(allocator, "Failed to step source: {}\n", .{err});
+            const compile_unit = dwarf.findCompileUnit(pc_offset) catch |err| {
+                return stdout.printError("Failed to step source: {}\n", .{err});
+            };
+            const line_info = dwarf.getLineNumberInfo(dbg.allocator, compile_unit, pc_offset) catch |err| {
+                return stdout.printError("Failed to step source: {}\n", .{err});
             };
 
-            if ((new_line_info.line == line_info.line) and
-                (new_line_info.column == line_info.column) and
-                (std.mem.eql(u8, new_line_info.file_name, line_info.file_name)))
-            {
-                break;
+            while (true) {
+                try stepi(dbg, cmd);
+
+                pc_offset = try dbg.process.memmap.base_addr_info.getOffset(
+                    try ptrace.readRegister(dbg.allocator, dbg.process.pid, "pc"),
+                );
+                const new_line_info = dwarf.getLineNumberInfo(dbg.allocator, compile_unit, pc_offset) catch |err| {
+                    return stdout.printError("Failed to step source: {}\n", .{err});
+                };
+
+                if ((new_line_info.line == line_info.line) and
+                    (new_line_info.column == line_info.column) and
+                    (std.mem.eql(u8, new_line_info.file_name, line_info.file_name)))
+                {
+                    break;
+                }
             }
         }
+    } else {
+        return stdout.printError("Failed to step source line: The debug info not found.\n", .{});
     }
 }

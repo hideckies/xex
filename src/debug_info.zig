@@ -32,18 +32,19 @@ pub const DebugInfo = struct {
                 ) catch null;
 
                 // Update pc_range of functions.
-                const dwarf = debug_info.?.dwarf;
-                const dwarf_func_list = dwarf.func_list;
-                for (dwarf_func_list.items) |*dwarf_func| {
-                    if (dwarf_func.pc_range == null) {
-                        // Find target functions.
-                        for (funcs) |func| {
-                            try stdout.print("{s}\n", .{func});
-                            if (std.mem.eql(u8, func.name, dwarf_func.name.?)) {
-                                dwarf_func.pc_range = .{
-                                    .start = func.start_addr - func.base_addr,
-                                    .end = func.end_addr - func.base_addr,
-                                };
+                if (debug_info) |di| {
+                    const dwarf = di.dwarf;
+                    const dwarf_func_list = dwarf.func_list;
+                    for (dwarf_func_list.items) |*dwarf_func| {
+                        if (dwarf_func.pc_range == null) {
+                            // Find target functions.
+                            for (funcs) |func| {
+                                if (std.mem.eql(u8, func.name, dwarf_func.name.?)) {
+                                    dwarf_func.pc_range = .{
+                                        .start = func.start_addr - func.base_addr,
+                                        .end = func.end_addr - func.base_addr,
+                                    };
+                                }
                             }
                         }
                     }

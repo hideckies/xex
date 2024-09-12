@@ -188,8 +188,11 @@ pub const MemoryMap = struct {
         path: []const u8,
         index: usize,
     ) !MemorySegment {
-        const allocator = std.heap.page_allocator;
-        var found_segs = std.ArrayList(MemorySegment).init(allocator);
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var found_segs = std.ArrayList(MemorySegment).init(arena_allocator);
         defer found_segs.deinit();
 
         for (self.segs) |seg| {

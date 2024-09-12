@@ -112,12 +112,12 @@ pub const Disas = struct {
     }
 
     pub fn displayInstructions(self: Self) !void {
-        const pc = try ptrace.readRegister(self.pid, "pc");
+        const pc = try ptrace.readRegister(self.allocator, self.pid, "pc");
 
         for (self.insts, 0..) |inst, i| {
             if (i + 1 > self.lines) break;
 
-            inst.display(self.allocator, pc, self.breakpoints, self.funcs) catch {
+            inst.display(pc, self.breakpoints, self.funcs) catch {
                 try stdout.print("<unknown>\n", .{});
             };
         }
