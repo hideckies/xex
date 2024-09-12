@@ -82,12 +82,11 @@ pub const X8664Registers = extern struct {
         var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        const str_generals = try std.fmt.allocPrint(arena_allocator,
+        const str_generals_1 = try std.fmt.allocPrint(arena_allocator,
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
-            \\{s} {s} {s} {s}
         , .{
             try cham.yellow().fmt("RAX", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.rax}),
@@ -97,6 +96,12 @@ pub const X8664Registers = extern struct {
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.rcx}),
             try cham.yellow().fmt("RDX", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.rdx}),
+            try cham.yellow().fmt("R8 ", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r8}),
+            try cham.yellow().fmt("R9 ", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r9}),
+            try cham.yellow().fmt("R10", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r10}),
             try cham.yellow().fmt("R11", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.r11}),
             try cham.yellow().fmt("R12", .{}),
@@ -107,6 +112,13 @@ pub const X8664Registers = extern struct {
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.r14}),
             try cham.yellow().fmt("R15", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.r15}),
+        });
+        defer arena_allocator.free(str_generals_1);
+
+        const str_generals_2 = try std.fmt.allocPrint(arena_allocator,
+            \\{s} {s} {s} {s} {s} {s}
+            \\{s} {s} {s} {s}
+        , .{
             try cham.yellow().fmt("RSI", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.rsi}),
             try cham.yellow().fmt("RDI", .{}),
@@ -118,7 +130,7 @@ pub const X8664Registers = extern struct {
             try cham.yellow().fmt("RIP", .{}),
             try cham.cyanBright().fmt("0x{x:0>16}", .{self.rip}),
         });
-        defer arena_allocator.free(str_generals);
+        defer arena_allocator.free(str_generals_2);
 
         const str_segs = try std.fmt.allocPrint(arena_allocator,
             \\{s} {s} {s} {s} {s} {s}
@@ -166,7 +178,7 @@ pub const X8664Registers = extern struct {
         defer arena_allocator.free(str_eflags_keys);
         defer arena_allocator.free(str_eflags_values);
 
-        try stdout.print("{s}\n\n", .{str_generals});
+        try stdout.print("{s}\n{s}\n\n", .{ str_generals_1, str_generals_2 });
         try stdout.print("{s}\n\n", .{str_segs});
         try stdout.print("{s}\n{s}\n", .{ str_eflags_keys, str_eflags_values });
     }
@@ -184,6 +196,12 @@ pub const X8664Registers = extern struct {
             return self.rcx;
         } else if (std.mem.eql(u8, reg_lower, "rdx")) {
             return self.rdx;
+        } else if (std.mem.eql(u8, reg_lower, "r8")) {
+            return self.r8;
+        } else if (std.mem.eql(u8, reg_lower, "r9")) {
+            return self.r9;
+        } else if (std.mem.eql(u8, reg_lower, "r10")) {
+            return self.r10;
         } else if (std.mem.eql(u8, reg_lower, "r11")) {
             return self.r11;
         } else if (std.mem.eql(u8, reg_lower, "r12")) {
@@ -268,6 +286,12 @@ pub const X8664Registers = extern struct {
             self.rcx = value;
         } else if (std.mem.eql(u8, reg_lower, "rdx")) {
             self.rdx = value;
+        } else if (std.mem.eql(u8, reg_lower, "r8")) {
+            self.r8 = value;
+        } else if (std.mem.eql(u8, reg_lower, "r9")) {
+            self.r9 = value;
+        } else if (std.mem.eql(u8, reg_lower, "r10")) {
+            self.r10 = value;
         } else if (std.mem.eql(u8, reg_lower, "r11")) {
             self.r11 = value;
         } else if (std.mem.eql(u8, reg_lower, "r12")) {

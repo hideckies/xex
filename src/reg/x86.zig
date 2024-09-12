@@ -76,37 +76,25 @@ pub const X86Registers = extern struct {
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
             \\{s} {s} {s} {s} {s} {s}
-            \\{s} {s} {s} {s} {s} {s}
-            \\{s} {s} {s} {s}
         , .{
-            try cham.yellow().fmt("RAX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rax}),
-            try cham.yellow().fmt("RBX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rbx}),
-            try cham.yellow().fmt("RCX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rcx}),
-            try cham.yellow().fmt("RDX", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rdx}),
-            try cham.yellow().fmt("R11", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r11}),
-            try cham.yellow().fmt("R12", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r12}),
-            try cham.yellow().fmt("R13", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r13}),
-            try cham.yellow().fmt("R14", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r14}),
-            try cham.yellow().fmt("R15", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.r15}),
+            try cham.yellow().fmt("EAX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.eax}),
+            try cham.yellow().fmt("EBX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.ebx}),
+            try cham.yellow().fmt("ECX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.ecx}),
+            try cham.yellow().fmt("EDX", .{}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.edx}),
             try cham.yellow().fmt("RSI", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rsi}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.esi}),
             try cham.yellow().fmt("RDI", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rdi}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.edi}),
             try cham.yellow().fmt("RBP", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rbp}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.ebp}),
             try cham.yellow().fmt("RSP", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rsp}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.esp}),
             try cham.yellow().fmt("RIP", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.rip}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.eip}),
         });
         defer arena_allocator.free(str_generals);
 
@@ -115,17 +103,17 @@ pub const X86Registers = extern struct {
             \\{s} {s} {s} {s} {s} {s}
         , .{
             try cham.yellow().fmt("CS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.cs}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.xcs}),
             try cham.yellow().fmt("DS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.ds}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.xds}),
             try cham.yellow().fmt("ES", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.es}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.xes}),
             try cham.yellow().fmt("FS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.fs}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.xfs}),
             try cham.yellow().fmt("GS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.gs}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.xgs}),
             try cham.yellow().fmt("SS", .{}),
-            try cham.cyanBright().fmt("0x{x:0>16}", .{self.ss}),
+            try cham.cyanBright().fmt("0x{x:0>16}", .{self.xss}),
         });
         defer arena_allocator.free(str_segs);
 
