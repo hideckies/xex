@@ -11,21 +11,18 @@ Reverse engineering tool for ELF and PE. I'm developing this to enhance my rever
 
 *xex currently only has basic functionality.
 
-## Supported Architecutures
+### Supported Architecutures
 
 x86, x86_64
 
-<br />
-
 ## Install
 
-We can install **xex** from [releases](https://github.com/hideckies/xex/releases).
+Download it from [releases](https://github.com/hideckies/xex/releases).
 
-<br />
+### Build From Source
 
-## Build
-
-To build the project, clone and build it with `zig`. The Zig version **1.14.0+** is required.
+We can also build it from the repository.  
+Clone and build it with `zig`. The Zig version **1.14.0+** is required.
 
 ```sh
 git clone https://github.com/hideckies/xex
@@ -34,13 +31,11 @@ zig build
 ./zig-out/bin/xex --help
 ```
 
-<br />
-
 ## Usage
 
 Execute `xex --help` to display the usage. 
 
-## Dumping File Information
+### Dumping File Information
 
 We can dump file information for static analysis.
 
