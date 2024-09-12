@@ -2,6 +2,8 @@
 
 Reverse engineering tool for ELF and PE. I'm developing this to enhance my reverse engineering and binary exploitation skills.
 
+<img src="assets/screenshots.png" alt="screenshots" width=512 />
+
 ## Features
 
 - Dump file information (headers, hashes, and more)

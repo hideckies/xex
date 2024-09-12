@@ -157,7 +157,7 @@ pub fn build(b: *Build) !void {
                                 allocator,
                                 t,
                                 build_options.version,
-                            ), // try t.zigTriple(b.allocator),
+                            ),
                         },
                     },
                 },
