@@ -3,7 +3,7 @@ const stdout = @import("./common.zig").stdout;
 const FileType = @import("./file.zig").FileType;
 
 pub const elf = @import("./headers/elf/elf.zig");
-pub const MultiHeadersString = @import("./headers/fmt.zig").MultiHeadersString;
+pub const MultiEntriesString = @import("./headers/fmt.zig").MultiEntriesString;
 pub const pe = @import("./headers/pe/pe.zig");
 
 pub const ELFProgramHeader32 = elf.elf32.ELFProgramHeader32;
@@ -17,6 +17,7 @@ pub const ELF64_Sym = elf.elf64.ELF64_Sym;
 pub const ELFHeaders64 = elf.elf64.ELFHeaders64;
 
 pub const IMAGE_SECTION_HEADER = pe.common.IMAGE_SECTION_HEADER;
+pub const FUNCS = pe.common.FUNCS;
 
 pub const PEHeaders32 = pe.pe32.PEHeaders32;
 
@@ -131,7 +132,7 @@ pub const Headers = struct {
 
         switch (self.hdrs) {
             .ELFHeaders32 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     self.allocator,
                     ELFProgramHeader32,
                     self.hdrs.ELFHeaders32.program_headers,
@@ -143,7 +144,7 @@ pub const Headers = struct {
                 try stdout.print("{s}", .{ms.str_joined});
             },
             .ELFHeaders64 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     self.allocator,
                     ELFProgramHeader64,
                     self.hdrs.ELFHeaders64.program_headers,
@@ -168,7 +169,7 @@ pub const Headers = struct {
 
         switch (self.hdrs) {
             .ELFHeaders32 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     ELFSectionHeader32,
                     self.hdrs.ELFHeaders32.section_headers,
@@ -180,7 +181,7 @@ pub const Headers = struct {
                 try stdout.print("{s}", .{ms.str_joined});
             },
             .ELFHeaders64 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     ELFSectionHeader64,
                     self.hdrs.ELFHeaders64.section_headers,
@@ -192,7 +193,7 @@ pub const Headers = struct {
                 try stdout.print("{s}", .{ms.str_joined});
             },
             .PEHeaders32 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     IMAGE_SECTION_HEADER,
                     self.hdrs.PEHeaders32.image_section_headers,
@@ -204,7 +205,7 @@ pub const Headers = struct {
                 try stdout.print("{s}", .{ms.str_joined});
             },
             .PEHeaders64 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     IMAGE_SECTION_HEADER,
                     self.hdrs.PEHeaders64.image_section_headers,
@@ -227,7 +228,7 @@ pub const Headers = struct {
 
         switch (self.hdrs) {
             .ELFHeaders32 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     ELF32_Sym,
                     self.hdrs.ELFHeaders32.symbols,
@@ -239,7 +240,7 @@ pub const Headers = struct {
                 try stdout.print("{s}", .{ms.str_joined});
             },
             .ELFHeaders64 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     ELF64_Sym,
                     self.hdrs.ELFHeaders64.symbols,
@@ -250,8 +251,8 @@ pub const Headers = struct {
                 defer ms.deinit();
                 try stdout.print("{s}", .{ms.str_joined});
             },
-            .PEHeaders32 => try stdout.printError("Not implemented yet.\n", .{}),
-            .PEHeaders64 => try stdout.printError("Not implemented yet.\n", .{}),
+            .PEHeaders32 => try stdout.printError("{s}\n", .{empty_message}),
+            .PEHeaders64 => try stdout.printError("{s}\n", .{empty_message}),
         }
     }
 
@@ -264,7 +265,7 @@ pub const Headers = struct {
 
         switch (self.hdrs) {
             .ELFHeaders32 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     ELF32_Sym,
                     self.hdrs.ELFHeaders32.dynsymbols,
@@ -276,7 +277,7 @@ pub const Headers = struct {
                 try stdout.print("{s}", .{ms.str_joined});
             },
             .ELFHeaders64 => {
-                var ms = try MultiHeadersString.init(
+                var ms = try MultiEntriesString.init(
                     arena_allocator,
                     ELF64_Sym,
                     self.hdrs.ELFHeaders64.dynsymbols,
@@ -287,8 +288,82 @@ pub const Headers = struct {
                 defer ms.deinit();
                 try stdout.print("{s}", .{ms.str_joined});
             },
-            .PEHeaders32 => try stdout.printError("Not implemented yet.\n", .{}),
-            .PEHeaders64 => try stdout.printError("Not implemented yet.\n", .{}),
+            .PEHeaders32 => try stdout.printError("{s}\n", .{empty_message}),
+            .PEHeaders64 => try stdout.printError("{s}\n", .{empty_message}),
+        }
+    }
+
+    pub fn printExportTable(self: Self) !void {
+        const empty_message = "No export table.";
+
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        switch (self.hdrs) {
+            .ELFHeaders32 => try stdout.printError("{s}\n", .{empty_message}),
+            .ELFHeaders64 => try stdout.printError("{s}\n", .{empty_message}),
+            .PEHeaders32 => {
+                var ms = try MultiEntriesString.init(
+                    arena_allocator,
+                    FUNCS,
+                    self.hdrs.PEHeaders32.exported_funcs,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .PEHeaders64 => {
+                var ms = try MultiEntriesString.init(
+                    arena_allocator,
+                    FUNCS,
+                    self.hdrs.PEHeaders64.exported_funcs,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+        }
+    }
+
+    pub fn printImportTable(self: Self) !void {
+        const empty_message = "No import table.";
+
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        switch (self.hdrs) {
+            .ELFHeaders32 => try stdout.printError("{s}\n", .{empty_message}),
+            .ELFHeaders64 => try stdout.printError("{s}\n", .{empty_message}),
+            .PEHeaders32 => {
+                var ms = try MultiEntriesString.init(
+                    arena_allocator,
+                    FUNCS,
+                    self.hdrs.PEHeaders32.imported_funcs,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
+            .PEHeaders64 => {
+                var ms = try MultiEntriesString.init(
+                    arena_allocator,
+                    FUNCS,
+                    self.hdrs.PEHeaders64.imported_funcs,
+                    empty_message,
+                    true,
+                    0,
+                );
+                defer ms.deinit();
+                try stdout.print("{s}", .{ms.str_joined});
+            },
         }
     }
 };

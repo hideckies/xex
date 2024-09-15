@@ -1,7 +1,7 @@
 const std = @import("std");
 const chameleon = @import("chameleon");
 
-pub const MultiHeadersString = struct {
+pub const MultiEntriesString = struct {
     allocator: std.mem.Allocator,
     str: std.ArrayList([]const u8),
     str_joined: []const u8,
@@ -11,7 +11,7 @@ pub const MultiHeadersString = struct {
     pub fn init(
         allocator: std.mem.Allocator,
         comptime T: type,
-        headers: []T,
+        entries: []T,
         comptime empty_message: []const u8,
         comptime is_index: bool,
         comptime indent: usize,
@@ -24,8 +24,8 @@ pub const MultiHeadersString = struct {
         defer cham.deinit();
 
         var str_hdrs = std.ArrayList([]const u8).init(allocator);
-        if (headers.len > 0) {
-            for (headers, 0..) |hdr, i| {
+        if (entries.len > 0) {
+            for (entries, 0..) |hdr, i| {
                 const str_hdr = if (is_index) try std.fmt.allocPrint(
                     allocator,
                     "{s}[{s}] {s}\n",

@@ -19,11 +19,11 @@ pub fn headers(dbg: *Debugger) !void {
     try dbg.headers.printHeaders();
 }
 
-pub fn file_header(dbg: *Debugger) !void {
+pub fn fileHeader(dbg: *Debugger) !void {
     try dbg.headers.printFileHeader();
 }
 
-pub fn program_headers(dbg: *Debugger) !void {
+pub fn programHeaders(dbg: *Debugger) !void {
     try dbg.headers.printProgramHeaders();
 }
 
@@ -37,6 +37,14 @@ pub fn symbols(dbg: *Debugger) !void {
 
 pub fn dynsymbols(dbg: *Debugger) !void {
     try dbg.headers.printDynSymbols();
+}
+
+pub fn exportTable(dbg: *Debugger) !void {
+    try dbg.headers.printExportTable();
+}
+
+pub fn importTable(dbg: *Debugger) !void {
+    try dbg.headers.printImportTable();
 }
 
 // Display all functions.

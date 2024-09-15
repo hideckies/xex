@@ -13,7 +13,9 @@ pub const HELP =
     \\  program-headers             : Display program headers.
     \\  section-headers, sections   : Display sections.
     \\  symbols, syms               : Display symbol table.
-    \\  dynsymbols, dynsyms         : Display dynamic symbol table.
+    \\  dynsymbols, dynsyms         : Display dynamic symbol table for ELF.
+    \\  export-table                : Display export table for PE.
+    \\  import-table                : Display import table for PE.
     \\  functions, funcs            : List all functions.
     \\  disassemble, disas, dis     : Disassemble at specified address.
     // \\  decompile                   : Decompile.
@@ -81,7 +83,15 @@ pub const HELP_SYMBOLS =
 ;
 
 pub const HELP_DYNSYMBOLS =
-    \\dynsymbols, dynsyms   : Display dynamic symbol table.
+    \\dynsymbols, dynsyms   : Display dynamic symbol table for ELF.
+;
+
+pub const HELP_EXPORT_TABLE =
+    \\export-table  : Display export table for PE.
+;
+
+pub const HELP_IMPORT_TABLE =
+    \\import-table  : Display import table for PE.
 ;
 
 pub const HELP_FUNCTIONS =

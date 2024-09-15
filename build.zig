@@ -38,13 +38,6 @@ const sources_x86 = &.{
     // "X86ATTInstPrinter.c",
 };
 
-fn archName(arch: []const u8) []const u8 {
-    if (std.mem.eql(u8, arch, "x86_64")) {
-        return "x64";
-    }
-    return arch;
-}
-
 fn getDestDirName(allocator: std.mem.Allocator, target: std.Target.Query, version: []const u8) ![]u8 {
     const os_tag = @tagName(target.os_tag.?);
     const arch = @tagName(target.cpu_arch.?);
@@ -52,7 +45,7 @@ fn getDestDirName(allocator: std.mem.Allocator, target: std.Target.Query, versio
     return std.fmt.allocPrint(
         allocator,
         "{s}-{s}-{s}-{s}",
-        .{ APP_NAME, os_tag, archName(arch), version },
+        .{ APP_NAME, os_tag, arch, version },
     );
 }
 

@@ -21,6 +21,8 @@ pub const CommandType = enum {
     sections,
     symbols,
     dynsymbols,
+    export_table,
+    import_table,
     functions,
     disassemble,
     // decompile,
@@ -76,6 +78,10 @@ pub const CommandType = enum {
             return CommandType.symbols;
         } else if (std.mem.eql(u8, command, "dynsymbols") or std.mem.eql(u8, command, "dynsyms")) {
             return CommandType.dynsymbols;
+        } else if (std.mem.eql(u8, command, "export-table")) {
+            return CommandType.export_table;
+        } else if (std.mem.eql(u8, command, "import-table")) {
+            return CommandType.import_table;
         } else if (std.mem.eql(u8, command, "functions") or std.mem.eql(u8, command, "funcs")) {
             return CommandType.functions;
         } else if (std.mem.eql(u8, command, "disassemble") or std.mem.eql(u8, command, "disas") or std.mem.eql(u8, command, "dis")) {
@@ -175,6 +181,10 @@ pub const Command = struct {
             try stdout.print("{s}\n", .{constant.HELP_SYMBOLS});
         } else if (std.mem.eql(u8, command_name, "dynsymbols") or std.mem.eql(u8, command_name, "dynsyms")) {
             try stdout.print("{s}\n", .{constant.HELP_DYNSYMBOLS});
+        } else if (std.mem.eql(u8, command_name, "export-table")) {
+            try stdout.print("{s}\n", .{constant.HELP_EXPORT_TABLE});
+        } else if (std.mem.eql(u8, command_name, "import-table")) {
+            try stdout.print("{s}\n", .{constant.HELP_IMPORT_TABLE});
         } else if (std.mem.eql(u8, command_name, "functions") or std.mem.eql(u8, command_name, "funcs")) {
             try stdout.print("{s}\n", .{constant.HELP_FUNCTIONS});
         } else if (std.mem.eql(u8, command_name, "disassemble") or std.mem.eql(u8, command_name, "disas") or std.mem.eql(u8, command_name, "dis")) {

@@ -24,7 +24,9 @@ const USAGE =
     \\    --program-headers         : Dump program headers.
     \\    --sections                : Dump sections.
     \\    --symbols, --syms         : Dump symbol table.
-    \\    --dynsymbols, --dynsyms   : Dump dynamic symbol table.
+    \\    --dynsymbols, --dynsyms   : Dump dynamic symbol table for ELF.
+    \\    --export-table            : Dump export table for PE.
+    \\    --import-table            : Dump import table for PE.
     \\    --functions, --funcs      : Dump functions.
     \\
     \\  GENERAL
@@ -54,6 +56,8 @@ pub const Flags = struct {
     sections: bool,
     symbols: bool,
     dynsymbols: bool,
+    export_table: bool,
+    import_table: bool,
     functions: bool,
     // GENERAL
     help: bool,
@@ -71,6 +75,8 @@ pub const Flags = struct {
             .sections = false,
             .symbols = false,
             .dynsymbols = false,
+            .export_table = false,
+            .import_table = false,
             .functions = false,
             .help = false,
             .version = false,
@@ -133,6 +139,12 @@ pub const Cli = struct {
                     pos_args_start_idx += 1;
                 } else if (std.mem.eql(u8, arg, "--dynsymbols") or std.mem.eql(u8, arg, "--dynsyms")) {
                     flags.dynsymbols = true;
+                    pos_args_start_idx += 1;
+                } else if (std.mem.eql(u8, arg, "--export-table")) {
+                    flags.export_table = true;
+                    pos_args_start_idx += 1;
+                } else if (std.mem.eql(u8, arg, "--import-table")) {
+                    flags.import_table = true;
                     pos_args_start_idx += 1;
                 } else if (std.mem.eql(u8, arg, "--functions") or std.mem.eql(u8, arg, "--funcs")) {
                     flags.functions = true;

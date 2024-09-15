@@ -13,7 +13,7 @@ const IMAGE_IMPORT_DESCRIPTOR = common.IMAGE_IMPORT_DESCRIPTOR;
 const FUNCS = common.FUNCS;
 
 const decode = @import("./decode.zig");
-const MultiHeadersString = @import("../fmt.zig").MultiHeadersString;
+const MultiEntriesString = @import("../fmt.zig").MultiEntriesString;
 
 // Reference: https://www.vergiliusproject.com/kernels/x64/windows-11/23h2/_IMAGE_OPTIONAL_HEADER64
 pub const IMAGE_OPTIONAL_HEADER64 = struct {
@@ -65,7 +65,7 @@ pub const IMAGE_OPTIONAL_HEADER64 = struct {
         var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        var ms_data_dir = try MultiHeadersString.init(
+        var ms_data_dir = try MultiEntriesString.init(
             self.allocator,
             IMAGE_DATA_DIRECTORY,
             @constCast(&self.DataDirectory),
@@ -196,7 +196,6 @@ pub const PEHeaders64 = struct {
     image_nt_headers: IMAGE_NT_HEADERS64,
     image_section_headers: []IMAGE_SECTION_HEADER,
     image_export_directory: IMAGE_EXPORT_DIRECTORY,
-
     exported_funcs: []FUNCS,
     image_import_descriptors: []IMAGE_IMPORT_DESCRIPTOR,
     imported_funcs: []FUNCS,
@@ -209,7 +208,7 @@ pub const PEHeaders64 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        var ms_shs = try MultiHeadersString.init(
+        var ms_shs = try MultiEntriesString.init(
             self.allocator,
             IMAGE_SECTION_HEADER,
             self.image_section_headers,
@@ -220,7 +219,7 @@ pub const PEHeaders64 = struct {
         defer ms_shs.deinit();
         const str_shs = ms_shs.str_joined;
 
-        var ms_exported_func = try MultiHeadersString.init(
+        var ms_exported_func = try MultiEntriesString.init(
             self.allocator,
             FUNCS,
             self.exported_funcs,
@@ -231,7 +230,7 @@ pub const PEHeaders64 = struct {
         defer ms_exported_func.deinit();
         const str_exported_funcs = ms_exported_func.str_joined;
 
-        var ms_imported_funcs = try MultiHeadersString.init(
+        var ms_imported_funcs = try MultiEntriesString.init(
             self.allocator,
             FUNCS,
             self.imported_funcs,
@@ -257,7 +256,6 @@ pub const PEHeaders64 = struct {
             \\========
             \\
             \\{s}
-            \\
             \\
             \\Export Table
             \\============

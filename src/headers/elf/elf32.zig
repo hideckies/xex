@@ -4,7 +4,7 @@ const stdout = @import("../../common.zig").stdout;
 const util = @import("../../common.zig").util;
 
 const decode = @import("./decode.zig");
-const MultiHeadersString = @import("../fmt.zig").MultiHeadersString;
+const MultiEntriesString = @import("../fmt.zig").MultiEntriesString;
 
 // Reference: https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.eheader.html
 pub const ELFHeader32 = struct {
@@ -280,7 +280,7 @@ pub const ELFHeaders32 = struct {
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        var ms_phs = try MultiHeadersString.init(
+        var ms_phs = try MultiEntriesString.init(
             self.allocator,
             ELFProgramHeader32,
             self.program_headers,
@@ -291,7 +291,7 @@ pub const ELFHeaders32 = struct {
         defer ms_phs.deinit();
         const str_phs = ms_phs.str_joined;
 
-        var ms_shs = try MultiHeadersString.init(
+        var ms_shs = try MultiEntriesString.init(
             self.allocator,
             ELFSectionHeader32,
             self.section_headers,
@@ -302,7 +302,7 @@ pub const ELFHeaders32 = struct {
         defer ms_shs.deinit();
         const str_shs = ms_shs.str_joined;
 
-        var ms_symbols = try MultiHeadersString.init(
+        var ms_symbols = try MultiEntriesString.init(
             self.allocator,
             ELF32_Sym,
             self.symbols,
@@ -313,7 +313,7 @@ pub const ELFHeaders32 = struct {
         defer ms_symbols.deinit();
         const str_symbols = ms_symbols.str_joined;
 
-        var ms_dynsymbols = try MultiHeadersString.init(
+        var ms_dynsymbols = try MultiEntriesString.init(
             self.allocator,
             ELF32_Sym,
             self.dynsymbols,

@@ -1,1 +1,4 @@
-elf/hello/build/*
+# elf/hello/build/*
+# pe/hello/build/*
+
+**/*/build/*

@@ -4,7 +4,7 @@ const stdout = @import("../../common.zig").stdout;
 const util = @import("../../common.zig").util;
 const decode = @import("./decode.zig");
 
-const MultiHeadersString = @import("../fmt.zig").MultiHeadersString;
+const MultiEntriesString = @import("../fmt.zig").MultiEntriesString;
 
 // Reference: https://www.vergiliusproject.com/kernels/x64/windows-11/23h2/_IMAGE_DOS_HEADER
 pub const IMAGE_DOS_HEADER = struct {
@@ -362,7 +362,7 @@ pub const FUNCS = struct {
         var cham = chameleon.initRuntime(.{ .allocator = arena_allocator });
         defer cham.deinit();
 
-        var ms_funcs = try MultiHeadersString.init(
+        var ms_funcs = try MultiEntriesString.init(
             self.allocator,
             []const u8,
             self.Functions,

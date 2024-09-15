@@ -35,15 +35,19 @@ pub fn main() !void {
     } else if (cli.flags.headers) {
         return handler.analysis.headers(&dbg);
     } else if (cli.flags.file_header) {
-        return handler.analysis.file_header(&dbg);
+        return handler.analysis.fileHeader(&dbg);
     } else if (cli.flags.program_headers) {
-        return handler.analysis.program_headers(&dbg);
+        return handler.analysis.programHeaders(&dbg);
     } else if (cli.flags.sections) {
         return handler.analysis.sections(&dbg);
     } else if (cli.flags.symbols) {
         return handler.analysis.symbols(&dbg);
     } else if (cli.flags.dynsymbols) {
         return handler.analysis.dynsymbols(&dbg);
+    } else if (cli.flags.export_table) {
+        return handler.analysis.exportTable(&dbg);
+    } else if (cli.flags.import_table) {
+        return handler.analysis.importTable(&dbg);
     } else if (cli.flags.functions) {
         return handler.analysis.functions(&dbg);
     }
