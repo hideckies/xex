@@ -583,7 +583,7 @@ pub const SymbolType = struct {
     const Self = @This();
 
     // value: st_info in symbol table
-    pub fn parse(value: u8) !Self {
+    pub fn parse(value: u8) Self {
         switch (value & 0xf) {
             0x00 => return Self{ .stt = STT.stt_notype, .str = "NOTYPE" },
             0x01 => return Self{ .stt = STT.stt_object, .str = "OBJECT" },

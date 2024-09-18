@@ -113,7 +113,7 @@ pub fn getFunctions(
                 var func_symbols_tmp = std.ArrayList(ELF32_Sym).init(allocator);
                 defer func_symbols_tmp.deinit();
                 for (symbols) |symbol| {
-                    if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
+                    if ((decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
                         try funcs.append(Function.init(
                             allocator,
                             symbol.st_name_str,
@@ -137,7 +137,7 @@ pub fn getFunctions(
                 const exe_base_addr = memseg.start_addr;
 
                 for (symbols) |symbol| {
-                    if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
+                    if ((decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
                         if (symbol.st_value == 0) continue;
 
                         // Get the start address of the function.
@@ -220,7 +220,7 @@ pub fn getFunctions(
                 var idx: usize = 0;
                 for (dynsymbols) |symbol| {
                     // Check if the symbol type is FUNC.
-                    if ((try decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
+                    if ((decode_elf.SymbolType.parse(symbol.st_info)).stt == decode_elf.STT.stt_func) {
                         if (std.mem.eql(u8, symbol.st_name_str, "__libc_start_main")) continue; // TODO: How to treat the '__libc_start_main'?
 
                         var func_start_addr: usize = 0;
@@ -231,7 +231,7 @@ pub fn getFunctions(
                         }
 
                         // Get the end address of the function.
-                        // const func_end_addr = func_start_addr + plt_got_size;
+                        var func_end_addr: usize = func_start_addr + plt_got_size;
                         var disas = try Disas.init(
                             allocator,
                             process.pid,
@@ -241,7 +241,7 @@ pub fn getFunctions(
                             null,
                         );
                         defer disas.deinit();
-                        const func_end_addr = try disas.findFuncEndAddr();
+                        func_end_addr = disas.findFuncEndAddr() catch func_start_addr + symbol.st_size;
 
                         try funcs.append(Function.init(
                             allocator,

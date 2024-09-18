@@ -254,7 +254,7 @@ pub const ELF32_Sym = struct {
         ;
         return writer.print(str, .{
             try cham.yellow().fmt("{s}", .{self.st_name_str}),
-            try cham.magentaBright().fmt("{s}", .{(try decode.SymbolType.parse(self.st_info)).str}),
+            try cham.magentaBright().fmt("{s}", .{(decode.SymbolType.parse(self.st_info)).str}),
             try cham.cyanBright().fmt("0x{x:0>8}", .{self.st_value}),
             try cham.cyanBright().fmt("0x{x:0>8}", .{self.st_size}),
             try cham.cyanBright().fmt("0x{x:0>2}", .{self.st_other}),

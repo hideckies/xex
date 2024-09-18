@@ -168,7 +168,6 @@ pub fn getInstructions(
     defer _ = c.cs_close(&handle);
     const err = c.cs_open(c.CS_ARCH_X86, c.CS_MODE_64, &handle);
     if (err != c.CS_ERR_OK) {
-        try stdout.print("error: {}\n", .{err});
         return error.CapstoneInitError;
     }
 
@@ -253,7 +252,10 @@ pub fn getInstructions(
     } else {
         const err_code = c.cs_errno(handle);
         if (parseErrorCode(err_code)) |e| {
-            return e;
+            switch (e) {
+                error.OK => return insts.toOwnedSlice(),
+                else => return e,
+            }
         }
     }
     return error.Unknown;
